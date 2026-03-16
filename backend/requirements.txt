@@ -1,0 +1,47 @@
+# ─────────────────────────────────────────────
+# Trading Portal — Python Dependencies
+# Install: pip install -r requirements.txt
+# Python: 3.11+
+# ─────────────────────────────────────────────
+
+# ── Web framework ─────────────────────────────
+fastapi==0.111.0
+uvicorn[standard]==0.29.0
+python-multipart==0.0.9
+
+# ── Market data ───────────────────────────────
+yfinance>=1.0.0
+pandas==2.2.2
+numpy==1.26.4
+
+# ── Technical indicators ──────────────────────
+# pandas-ta installed with --no-deps in run.sh (numba incompatible with Python 3.14)
+
+# ── Zerodha ───────────────────────────────────
+kiteconnect==5.0.1
+
+# ── Database ──────────────────────────────────
+# SQLite is built-in to Python — no extra package needed
+
+# ── Scheduling ────────────────────────────────
+apscheduler==3.10.4
+
+# ── Telegram ──────────────────────────────────
+python-telegram-bot==21.3
+
+# ── Config / env ──────────────────────────────
+python-dotenv==1.0.1
+pydantic==2.7.1
+pydantic-settings==2.3.1
+
+# ── Utilities ─────────────────────────────────
+pytz==2024.1
+httpx==0.27.0
+
+# ── Dev / testing ─────────────────────────────
+pytest==8.2.2
+pytest-asyncio==0.23.7
+
+# ── Auth ──────────────────────────────
+python-jose[cryptography]==3.3.0
+bcrypt==4.0.1

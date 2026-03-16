@@ -1,0 +1,23 @@
+[Unit]
+Description=Trading Portal Backend
+After=network.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/opt/trading-portal/backend
+Environment=PYTHONPATH=/opt/trading-portal/backend
+EnvironmentFile=/opt/trading-portal/.env
+ExecStart=/opt/trading-portal/venv/bin/uvicorn main:app \
+  --host 127.0.0.1 \
+  --port 8000 \
+  --workers 1 \
+  --log-level info
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

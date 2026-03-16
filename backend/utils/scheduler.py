@@ -1,0 +1,202 @@
+"""
+utils/scheduler.py — APScheduler job definitions
+
+Schedule (all times IST / Asia/Kolkata):
+  08:45  — run_screener()         : select today's watchlist
+  09:15–15:10 every 5 min — refresh_candles() + check_signals()
+  15:10  — force_close_all()      : close any open position
+  15:45  — send_daily_summary()   : Telegram summary
+
+Mon–Fri only. Skips public holidays (helpers.is_trading_day).
+"""
+
+import logging
+
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from apscheduler.triggers.cron import CronTrigger
+import pytz
+
+IST = pytz.timezone("Asia/Kolkata")
+log = logging.getLogger(__name__)
+
+scheduler = AsyncIOScheduler(timezone=IST)
+
+
+def start() -> None:
+    """Register all jobs and start the scheduler."""
+    # Pre-market screener at 08:45
+    scheduler.add_job(
+        job_run_screener,
+        CronTrigger(hour=8, minute=45, timezone=IST, day_of_week="mon-fri"),
+        id="screener", replace_existing=True,
+    )
+
+    # Candle refresh every 5 min during market hours
+    scheduler.add_job(
+        job_refresh_candles,
+        CronTrigger(
+            hour="9-15", minute="*/5",
+            timezone=IST, day_of_week="mon-fri",
+        ),
+        id="candle_refresh", replace_existing=True,
+    )
+
+    # Signal check every 5 min during market hours
+    scheduler.add_job(
+        job_check_signals,
+        CronTrigger(
+            hour="9-15", minute="*/5",
+            timezone=IST, day_of_week="mon-fri",
+        ),
+        id="signal_check", replace_existing=True,
+    )
+
+    # Force close at 15:10
+    scheduler.add_job(
+        job_force_close,
+        CronTrigger(hour=15, minute=10, timezone=IST, day_of_week="mon-fri"),
+        id="force_close", replace_existing=True,
+    )
+
+    # Daily summary at 15:45
+    scheduler.add_job(
+        job_daily_summary,
+        CronTrigger(hour=15, minute=45, timezone=IST, day_of_week="mon-fri"),
+        id="daily_summary", replace_existing=True,
+    )
+
+    scheduler.start()
+    log.info("Scheduler started with %d jobs", len(scheduler.get_jobs()))
+
+
+def stop() -> None:
+    """Gracefully shut down the scheduler."""
+    if scheduler.running:
+        scheduler.shutdown(wait=False)
+        log.info("Scheduler stopped")
+
+
+# ── Job functions ─────────────────────────────
+
+async def job_run_screener():
+    """08:45 — Pre-market screener: select today's watchlist."""
+    from utils.helpers import is_trading_day, today_ist
+    if not is_trading_day(today_ist()):
+        return
+    try:
+        from strategy.screener import run_screener
+        symbols = run_screener()
+        log.info("Screener complete: %s", symbols)
+        from api.websocket import manager
+        await manager.broadcast("watchlist_update", {"symbols": symbols})
+    except Exception as exc:
+        log.error("job_run_screener failed: %s", exc)
+
+
+async def job_refresh_candles():
+    """Every 5 min — Fetch latest 5-min candles for watchlist symbols."""
+    from utils.helpers import is_trading_day, today_ist, is_market_open, now_ist
+    if not is_trading_day(today_ist()) or not is_market_open(now_ist()):
+        return
+    try:
+        from strategy.screener import get_todays_watchlist
+        from data.historical import fetch_and_cache
+        for sym in get_todays_watchlist():
+            fetch_and_cache(sym, period="1d")
+    except Exception as exc:
+        log.error("job_refresh_candles failed: %s", exc)
+
+
+async def job_check_signals():
+    """Every 5 min — Check entry/exit signals and act."""
+    from utils.helpers import is_trading_day, today_ist, now_ist, is_entry_window
+    if not is_trading_day(today_ist()):
+        return
+    from database import queries as q
+    if q.get_setting("bot_paused") == "1":
+        return
+
+    try:
+        from strategy.screener import get_todays_watchlist
+        from data.historical import fetch_and_cache
+        from strategy.signals import check_entry_signal, check_exit_signal
+        from strategy.risk_manager import can_place_trade, calculate_position_size
+        from execution.paper_trader import (
+            get_open_paper_position, place_paper_order,
+            close_paper_position, get_paper_capital, get_daily_paper_summary,
+        )
+        from api.websocket import manager
+
+        now = now_ist()
+        pos = get_open_paper_position()
+
+        if pos:
+            sym    = pos["symbol"]
+            df     = fetch_and_cache(sym, period="1d")
+            if not df.empty:
+                reason = check_exit_signal(df, float(pos["entry_price"]), now)
+                if reason:
+                    ltp    = float(df["close"].iloc[-1])
+                    result = close_paper_position(pos["id"], ltp, reason)
+                    await manager.broadcast("trade_complete", result)
+                    log.info("Exit: %s [%s]", sym, reason)
+        else:
+            if not is_entry_window(now):
+                return
+            summary = get_daily_paper_summary()
+            capital = get_paper_capital()
+            allowed, _ = can_place_trade(
+                daily_loss   = abs(min(summary["final_pnl"], 0.0)),
+                trades_today = summary["trades_count"],
+                capital      = capital,
+            )
+            if not allowed:
+                return
+            for sym in get_todays_watchlist():
+                df = fetch_and_cache(sym, period="1d")
+                if df.empty:
+                    continue
+                sig = check_entry_signal(df, sym)
+                if sig:
+                    qty   = calculate_position_size(capital, sig.price, sig.stop_loss)
+                    order = place_paper_order(sym, "BUY", qty, sig.price, sig.reason)
+                    await manager.broadcast("signal", sig.to_dict())
+                    await manager.broadcast("position_update", order)
+                    log.info("Entry: %s ×%d @ %.2f", sym, qty, sig.price)
+                    break  # one position at a time
+
+    except Exception as exc:
+        log.error("job_check_signals failed: %s", exc)
+
+
+async def job_force_close():
+    """15:10 — Force close any open position."""
+    try:
+        from execution.paper_trader import get_open_paper_position, close_paper_position
+        from data.yfinance_client import get_latest_price
+        from api.websocket import manager
+
+        pos = get_open_paper_position()
+        if pos:
+            sym    = pos["symbol"]
+            ltp    = get_latest_price(sym) or float(pos["entry_price"])
+            result = close_paper_position(pos["id"], ltp, "FORCE_CLOSE")
+            await manager.broadcast("trade_complete", result)
+            log.info("Force close: %s @ %.2f", sym, ltp)
+    except Exception as exc:
+        log.error("job_force_close failed: %s", exc)
+
+
+async def job_daily_summary():
+    """15:45 — Compute and send daily P&L summary via Telegram + WebSocket."""
+    try:
+        from execution.paper_trader import get_daily_paper_summary
+        from alerts.telegram import send_daily_summary
+        from api.websocket import manager
+
+        summary = get_daily_paper_summary()
+        await send_daily_summary(summary)
+        await manager.broadcast("daily_summary", summary)
+        log.info("Daily summary sent")
+    except Exception as exc:
+        log.error("job_daily_summary failed: %s", exc)
