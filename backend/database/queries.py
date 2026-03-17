@@ -321,6 +321,58 @@ def get_achievements() -> list[dict]:
     return _rows_to_list(rows)
 
 
+# ── Activity Log ──────────────────────────────
+
+def log_activity(
+    event_type: str,
+    message: str,
+    symbol: Optional[str] = None,
+    data: Optional[dict] = None,
+) -> None:
+    """Insert an activity log entry. Never raises — fire and forget."""
+    import json
+    from utils.helpers import now_ist
+    try:
+        with get_db() as conn:
+            conn.execute(
+                """INSERT INTO activity_log (timestamp, event_type, symbol, message, data)
+                   VALUES (?, ?, ?, ?, ?)""",
+                (
+                    now_ist().isoformat(),
+                    event_type,
+                    symbol,
+                    message,
+                    json.dumps(data) if data else None,
+                ),
+            )
+    except Exception:
+        pass
+
+
+def get_activity_log(limit: int = 200, date_str: Optional[str] = None) -> list[dict]:
+    """Fetch activity log entries, newest first."""
+    if date_str:
+        sql = """SELECT * FROM activity_log WHERE date(timestamp) = ?
+                 ORDER BY timestamp DESC LIMIT ?"""
+        params = (date_str, limit)
+    else:
+        sql = "SELECT * FROM activity_log ORDER BY timestamp DESC LIMIT ?"
+        params = (limit,)
+    with get_db() as conn:
+        rows = conn.execute(sql, params).fetchall()
+    return _rows_to_list(rows)
+
+
+def purge_old_activity(days: int = 90) -> int:
+    """Delete activity log entries older than `days` days. Returns deleted count."""
+    with get_db() as conn:
+        cur = conn.execute(
+            "DELETE FROM activity_log WHERE timestamp < datetime('now', ?)",
+            (f"-{days} days",),
+        )
+        return cur.rowcount
+
+
 # ── Performance stats ─────────────────────────
 
 def get_performance_stats() -> dict:

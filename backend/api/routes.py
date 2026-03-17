@@ -152,6 +152,20 @@ async def get_positions():
 
 
 # ─────────────────────────────────────────────
+# Activity Log
+# ─────────────────────────────────────────────
+
+@router.get("/activity")
+async def get_activity(
+    limit: int = Query(default=200, ge=1, le=500),
+    date:  Optional[str] = Query(default=None, description="YYYY-MM-DD filter"),
+):
+    """Chronological activity log — screener, signals, trades, risk blocks."""
+    entries = queries.get_activity_log(limit=limit, date_str=date)
+    return {"activity": entries}
+
+
+# ─────────────────────────────────────────────
 # Trades
 # ─────────────────────────────────────────────
 

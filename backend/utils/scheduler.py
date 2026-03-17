@@ -65,6 +65,13 @@ def start() -> None:
         id="daily_summary", replace_existing=True,
     )
 
+    # Purge old activity logs daily at 02:00
+    scheduler.add_job(
+        job_purge_activity,
+        CronTrigger(hour=2, minute=0, timezone=IST),
+        id="purge_activity", replace_existing=True,
+    )
+
     scheduler.start()
     log.info("Scheduler started with %d jobs", len(scheduler.get_jobs()))
 
@@ -85,8 +92,13 @@ async def job_run_screener():
         return
     try:
         from strategy.screener import run_screener
+        from database.queries import log_activity
         symbols = run_screener()
         log.info("Screener complete: %s", symbols)
+        if symbols:
+            log_activity("screener", f"Watchlist selected: {', '.join(symbols)}", data={"symbols": symbols})
+        else:
+            log_activity("screener", "Screener ran — no stocks passed filters today")
         from api.websocket import manager
         await manager.broadcast("watchlist_update", {"symbols": symbols})
     except Exception as exc:
@@ -130,6 +142,7 @@ async def job_check_signals():
         now = now_ist()
         pos = get_open_paper_position()
 
+        from database.queries import log_activity
         if pos:
             sym    = pos["symbol"]
             df     = fetch_and_cache(sym, period="1d")
@@ -145,12 +158,13 @@ async def job_check_signals():
                 return
             summary = get_daily_paper_summary()
             capital = get_paper_capital()
-            allowed, _ = can_place_trade(
+            allowed, block_reason = can_place_trade(
                 daily_loss   = abs(min(summary["final_pnl"], 0.0)),
                 trades_today = summary["trades_count"],
                 capital      = capital,
             )
             if not allowed:
+                log_activity("risk_block", f"Trade blocked: {block_reason}")
                 return
             for sym in get_todays_watchlist():
                 df = fetch_and_cache(sym, period="1d")
@@ -164,6 +178,8 @@ async def job_check_signals():
                     await manager.broadcast("position_update", order)
                     log.info("Entry: %s ×%d @ %.2f", sym, qty, sig.price)
                     break  # one position at a time
+                else:
+                    log_activity("signal", f"No entry signal for {sym}", symbol=sym)
 
     except Exception as exc:
         log.error("job_check_signals failed: %s", exc)
@@ -175,6 +191,7 @@ async def job_force_close():
         from execution.paper_trader import get_open_paper_position, close_paper_position
         from data.yfinance_client import get_latest_price
         from api.websocket import manager
+        from database.queries import log_activity
 
         pos = get_open_paper_position()
         if pos:
@@ -183,6 +200,8 @@ async def job_force_close():
             result = close_paper_position(pos["id"], ltp, "FORCE_CLOSE")
             await manager.broadcast("trade_complete", result)
             log.info("Force close: %s @ %.2f", sym, ltp)
+        else:
+            log_activity("system", "3:10 PM — market close, no open positions")
     except Exception as exc:
         log.error("job_force_close failed: %s", exc)
 
@@ -193,10 +212,30 @@ async def job_daily_summary():
         from execution.paper_trader import get_daily_paper_summary
         from alerts.telegram import send_daily_summary
         from api.websocket import manager
+        from database.queries import log_activity
 
         summary = get_daily_paper_summary()
         await send_daily_summary(summary)
         await manager.broadcast("daily_summary", summary)
+        pnl = summary.get("final_pnl", 0)
+        wr  = summary.get("win_rate", 0)
+        cnt = summary.get("trades_count", 0)
+        log_activity(
+            "daily_summary",
+            f"Day complete — {cnt} trades | P&L ₹{pnl:+.2f} | WR {wr*100:.0f}%",
+            data=summary,
+        )
         log.info("Daily summary sent")
     except Exception as exc:
         log.error("job_daily_summary failed: %s", exc)
+
+
+async def job_purge_activity():
+    """02:00 daily — Delete activity log entries older than 90 days."""
+    try:
+        from database.queries import purge_old_activity
+        deleted = purge_old_activity(days=90)
+        if deleted:
+            log.info("Purged %d old activity log entries", deleted)
+    except Exception as exc:
+        log.error("job_purge_activity failed: %s", exc)

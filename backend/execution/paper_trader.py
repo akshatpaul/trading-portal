@@ -92,6 +92,14 @@ def place_paper_order(
     }
 
     _send_entry_alert(order, signal_reason)
+
+    from database.queries import log_activity
+    log_activity(
+        "trade_entry",
+        f"BUY {symbol} ×{quantity} @ ₹{fill_price:.2f} | target ₹{target:.2f} | stop ₹{stop_loss:.2f}",
+        symbol=symbol,
+        data={"fill_price": fill_price, "quantity": quantity, "target": target, "stop_loss": stop_loss},
+    )
     return order
 
 
@@ -167,6 +175,16 @@ def close_paper_position(
 
     result = {**trade, "trade_id": trade_id, "capital_after": round(capital, 2)}
     _send_exit_alert(result)
+
+    from database.queries import log_activity
+    reason_labels = {"TARGET": "Target hit", "STOP_LOSS": "Stop loss", "FORCE_CLOSE": "Force close", "MANUAL": "Manual close"}
+    label = reason_labels.get(exit_reason, exit_reason)
+    log_activity(
+        "trade_exit",
+        f"{label} — {symbol} ×{quantity} @ ₹{exit_price:.2f} | P&L ₹{final_pnl:+.2f}",
+        symbol=symbol,
+        data={"exit_price": exit_price, "exit_reason": exit_reason, "final_pnl": final_pnl},
+    )
     return result
 
 

@@ -105,6 +105,13 @@ export async function emergencyStop() {
   return data
 }
 
+export async function fetchActivity(limit = 200, date = null) {
+  const params = new URLSearchParams({ limit })
+  if (date) params.set('date', date)
+  const { data } = await api.get(`/api/activity?${params}`)
+  return data
+}
+
 export async function fetchKiteLoginUrl() {
   const { data } = await api.get('/api/kite/login-url')
   return data

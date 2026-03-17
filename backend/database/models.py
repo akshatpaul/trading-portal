@@ -141,6 +141,18 @@ CREATE TABLE IF NOT EXISTS app_settings (
 );
 """
 
+# ── Activity Log ──────────────────────────────
+CREATE_ACTIVITY_LOG = """
+CREATE TABLE IF NOT EXISTS activity_log (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    timestamp   TEXT NOT NULL,          -- ISO-8601 IST
+    event_type  TEXT NOT NULL,          -- screener|signal|trade_entry|trade_exit|force_close|risk_block|daily_summary|system
+    symbol      TEXT,                   -- nullable
+    message     TEXT NOT NULL,
+    data        TEXT                    -- JSON blob for extra details
+);
+"""
+
 ALL_TABLES = [
     CREATE_CANDLES,
     CREATE_SIGNALS,
@@ -150,4 +162,5 @@ ALL_TABLES = [
     CREATE_WATCHLIST,
     CREATE_ACHIEVEMENTS,
     CREATE_SETTINGS,
+    CREATE_ACTIVITY_LOG,
 ]
