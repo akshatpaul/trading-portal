@@ -120,8 +120,11 @@ async def job_watchdog_screener():
     try:
         from database.queries import get_watchlist, log_activity
         from alerts.telegram import send_screener_recovered, send_screener_failed
-        if get_watchlist(today_ist().isoformat()):
-            return  # all good
+        rows = get_watchlist(today_ist().isoformat())
+        if rows:
+            symbols = [r["symbol"].replace(".NS", "") for r in rows]
+            log_activity("system", f"Market open — monitoring {', '.join(symbols)}")
+            return
         log.warning("Watchdog: no watchlist found at 9:15 AM — screener missed, recovering")
         log_activity("system", "Watchdog: screener was missed, running now")
         from strategy.screener import run_screener
@@ -195,15 +198,27 @@ async def job_check_signals():
 
         from database.queries import log_activity
         if pos:
-            sym    = pos["symbol"]
-            df     = fetch_and_cache(sym, period="1d")
+            sym        = pos["symbol"]
+            entry      = float(pos["entry_price"])
+            target     = round(entry * 1.006, 2)
+            stop       = round(entry * 0.997, 2)
+            df         = fetch_and_cache(sym, period="1d")
             if not df.empty:
-                reason = check_exit_signal(df, float(pos["entry_price"]), now)
+                ltp    = float(df["close"].iloc[-1])
+                unreal = round((ltp - entry) * pos["quantity"], 2)
+                sign   = "+" if unreal >= 0 else ""
+                reason = check_exit_signal(df, entry, now)
                 if reason:
-                    ltp    = float(df["close"].iloc[-1])
                     result = close_paper_position(pos["id"], ltp, reason)
                     await manager.broadcast("trade_complete", result)
                     log.info("Exit: %s [%s]", sym, reason)
+                else:
+                    name = sym.replace(".NS", "")
+                    log_activity(
+                        "signal",
+                        f"Holding {name} — LTP ₹{ltp:,.2f} | Target ₹{target:,.2f} | Stop ₹{stop:,.2f} | P&L {sign}₹{unreal:,.2f}",
+                        symbol=sym,
+                    )
         else:
             if not is_entry_window(now):
                 return
