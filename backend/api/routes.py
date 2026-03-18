@@ -370,6 +370,19 @@ async def kite_holdings():
         raise HTTPException(status_code=502, detail=str(exc))
 
 
+@router.get("/kite/mf-holdings")
+async def kite_mf_holdings():
+    """Mutual fund holdings from Zerodha."""
+    from execution.live_trader import kite_ready, _get_kite
+    if not kite_ready():
+        raise HTTPException(status_code=400, detail="Kite not connected")
+    try:
+        kite = _get_kite()
+        return {"mf_holdings": kite.mf_holdings()}
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=str(exc))
+
+
 @router.get("/kite/login-url")
 async def kite_login_url():
     """Return the Zerodha OAuth login URL."""

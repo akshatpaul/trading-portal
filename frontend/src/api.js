@@ -132,6 +132,11 @@ export async function fetchKiteHoldings() {
   return data
 }
 
+export async function fetchKiteMFHoldings() {
+  const { data } = await api.get('/api/kite/mf-holdings')
+  return data
+}
+
 export async function runScreener() {
   const { data } = await api.post('/api/screener/run')
   return data

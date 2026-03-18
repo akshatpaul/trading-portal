@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { fetchKiteProfile, fetchKiteFunds, fetchKiteHoldings } from '../api'
+import { fetchKiteProfile, fetchKiteFunds, fetchKiteHoldings, fetchKiteMFHoldings } from '../api'
 import { useApp } from '../context/AppContext'
 import { formatINR } from '../utils/formatters'
 
@@ -50,15 +50,17 @@ export default function Kite() {
   const { status } = useApp()
   const kiteOk = status?.kite_configured ?? false
 
-  const profileQ  = useQuery({ queryKey: ['kite-profile'],  queryFn: fetchKiteProfile,  enabled: kiteOk, retry: false })
-  const fundsQ    = useQuery({ queryKey: ['kite-funds'],    queryFn: fetchKiteFunds,    enabled: kiteOk, retry: false, refetchInterval: 30000 })
-  const holdingsQ = useQuery({ queryKey: ['kite-holdings'], queryFn: fetchKiteHoldings, enabled: kiteOk, retry: false, refetchInterval: 60000 })
+  const profileQ  = useQuery({ queryKey: ['kite-profile'],     queryFn: fetchKiteProfile,    enabled: kiteOk, retry: false })
+  const fundsQ    = useQuery({ queryKey: ['kite-funds'],       queryFn: fetchKiteFunds,      enabled: kiteOk, retry: false, refetchInterval: 30000 })
+  const holdingsQ = useQuery({ queryKey: ['kite-holdings'],    queryFn: fetchKiteHoldings,   enabled: kiteOk, retry: false, refetchInterval: 60000 })
+  const mfQ       = useQuery({ queryKey: ['kite-mf-holdings'], queryFn: fetchKiteMFHoldings, enabled: kiteOk, retry: false, refetchInterval: 60000 })
 
   if (!kiteOk) return <NotConnected />
 
-  const profile  = profileQ.data
-  const equity   = fundsQ.data?.equity
-  const holdings = holdingsQ.data?.holdings ?? []
+  const profile    = profileQ.data
+  const equity     = fundsQ.data?.equity
+  const holdings   = holdingsQ.data?.holdings ?? []
+  const mfHoldings = mfQ.data?.mf_holdings ?? []
 
   const totalInvested = holdings.reduce((s, h) => s + (h.average_price * h.quantity), 0)
   const totalCurrent  = holdings.reduce((s, h) => s + (h.last_price * h.quantity), 0)
@@ -162,6 +164,69 @@ export default function Kite() {
         ) : (
           <p className="text-text-muted text-sm">
             {holdingsQ.error ? 'Failed to load holdings.' : 'No holdings in your demat account.'}
+          </p>
+        )}
+      </Section>
+
+      {/* Mutual Funds */}
+      <Section title={`Mutual Funds (${mfHoldings.length} funds)`}>
+        {mfQ.isLoading ? <Skeleton /> : mfHoldings.length > 0 ? (() => {
+          const mfInvested = mfHoldings.reduce((s, h) => s + h.average_price * h.quantity, 0)
+          const mfCurrent  = mfHoldings.reduce((s, h) => s + h.last_price  * h.quantity, 0)
+          const mfPnL      = mfCurrent - mfInvested
+
+          return (
+            <>
+              {/* Summary */}
+              <div className="grid grid-cols-3 gap-4 mb-4 p-3 bg-slate-800 rounded-xl">
+                <div>
+                  <p className="text-text-muted text-xs mb-1">Invested</p>
+                  <p className="font-mono font-semibold text-text-primary">{formatINR(mfInvested)}</p>
+                </div>
+                <div>
+                  <p className="text-text-muted text-xs mb-1">Current</p>
+                  <p className="font-mono font-semibold text-text-primary">{formatINR(mfCurrent)}</p>
+                </div>
+                <div>
+                  <p className="text-text-muted text-xs mb-1">Total P&L</p>
+                  <p className={`font-mono font-semibold ${mfPnL >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                    {mfPnL >= 0 ? '+' : ''}{formatINR(mfPnL)}
+                  </p>
+                </div>
+              </div>
+
+              {/* List */}
+              <div>
+                {mfHoldings.map(h => {
+                  const current = h.last_price * h.quantity
+                  const pnl     = current - h.average_price * h.quantity
+                  const pnlPct  = ((h.last_price - h.average_price) / h.average_price) * 100
+                  const pos     = pnl >= 0
+                  return (
+                    <div key={h.tradingsymbol} className="py-3 border-b border-card-border last:border-0">
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="min-w-0">
+                          <p className="font-medium text-text-primary text-sm leading-snug">{h.fund}</p>
+                          <p className="text-text-muted text-xs mt-0.5">
+                            {h.quantity.toFixed(3)} units · Avg NAV {formatINR(h.average_price)} · Folio {h.folio}
+                          </p>
+                        </div>
+                        <div className="text-right flex-shrink-0">
+                          <p className="font-mono text-sm font-semibold text-text-primary">{formatINR(current)}</p>
+                          <p className={`font-mono text-xs ${pos ? 'text-emerald-400' : 'text-red-400'}`}>
+                            {pos ? '+' : ''}{formatINR(pnl)} ({pos ? '+' : ''}{pnlPct.toFixed(2)}%)
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </>
+          )
+        })() : (
+          <p className="text-text-muted text-sm">
+            {mfQ.error ? 'Failed to load mutual funds.' : 'No mutual fund holdings found.'}
           </p>
         )}
       </Section>
