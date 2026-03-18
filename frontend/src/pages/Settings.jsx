@@ -27,10 +27,11 @@ export default function Settings() {
     queryFn: fetchRiskLimits,
   })
 
-  const mode    = status?.mode ?? 'paper'
-  const isLive  = mode === 'live'
-  const kiteOk  = status?.kite_configured ?? false
-  const tgOk    = status?.telegram_configured ?? false
+  const mode         = status?.mode ?? 'paper'
+  const isLive       = mode === 'live'
+  const kiteOk       = status?.kite_configured ?? false
+  const kiteKeySet   = status?.kite_api_key_set ?? false
+  const tgOk         = status?.telegram_configured ?? false
 
   const risk = riskQ.data
 
@@ -124,29 +125,42 @@ export default function Settings() {
           <span className={`text-xs font-semibold px-2.5 py-0.5 rounded-full border ${
             kiteOk
               ? 'bg-emerald-900/50 text-emerald-400 border-emerald-700/50'
+              : kiteKeySet
+              ? 'bg-amber-900/50 text-amber-400 border-amber-700/50'
               : 'bg-red-900/50 text-red-400 border-red-700/50'
           }`}>
-            {kiteOk ? '✓ Configured' : '✗ Not configured'}
+            {kiteOk ? '✓ Token active' : kiteKeySet ? '⚠ Login required' : '✗ Not configured'}
           </span>
         </div>
 
-        {kiteOk ? (
-          <p className="text-text-secondary text-sm">
-            Kite Connect is configured. Token is active.
+        {!kiteKeySet && (
+          <p className="text-text-secondary text-sm mb-3">
+            Add <code className="text-signal">KITE_API_KEY</code> and{' '}
+            <code className="text-signal">KITE_API_SECRET</code> to your backend{' '}
+            <code className="text-signal">.env</code> file, then restart the server.
           </p>
-        ) : (
-          <div className="space-y-3">
-            <p className="text-text-secondary text-sm">
-              Kite Connect is not configured. Configure API keys in your backend <code className="text-signal">.env</code> file
-              and then log in.
-            </p>
-            <button
-              onClick={handleKiteLogin}
-              className="btn-primary"
-            >
-              Open Kite Login →
-            </button>
-          </div>
+        )}
+
+        {kiteKeySet && !kiteOk && (
+          <p className="text-text-secondary text-sm mb-3">
+            API key is set. Click below to authenticate with Zerodha and get a session token.
+            Tokens expire daily — you must re-login each trading day.
+          </p>
+        )}
+
+        {kiteOk && (
+          <p className="text-text-secondary text-sm mb-3">
+            Session token is active. Re-login daily before market open — Kite tokens expire at midnight.
+          </p>
+        )}
+
+        {kiteKeySet && (
+          <button
+            onClick={handleKiteLogin}
+            className="btn-primary"
+          >
+            {kiteOk ? 'Re-login to Kite →' : 'Open Kite Login →'}
+          </button>
         )}
       </div>
 

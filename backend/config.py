@@ -9,7 +9,7 @@ from pydantic import Field
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=["../.env", ".env"],   # root .env first, local .env overrides
         env_file_encoding="utf-8",
         extra="ignore",
     )

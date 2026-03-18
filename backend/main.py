@@ -38,7 +38,7 @@ app.add_middleware(
 
 # ── Routes ────────────────────────────────────
 from api.auth import router as auth_router, verify_token
-from api.routes import router, health_router
+from api.routes import router, health_router, kite_public_router
 from api.websocket import websocket_endpoint
 
 # Auth router — no authentication required (login endpoint lives here)
@@ -49,6 +49,9 @@ app.include_router(router, dependencies=[Depends(verify_token)])
 
 # Health router — unprotected (monitoring / load balancer checks)
 app.include_router(health_router)
+
+# Kite OAuth callback — unprotected (Zerodha redirects here, no JWT available)
+app.include_router(kite_public_router)
 
 
 @app.websocket("/ws")

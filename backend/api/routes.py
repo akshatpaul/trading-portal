@@ -21,6 +21,7 @@ import logging
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Query
+from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
 
 from config import settings
@@ -31,6 +32,7 @@ log = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api")
 health_router = APIRouter()
+kite_public_router = APIRouter(prefix="/api")
 
 
 @health_router.get("/health")
@@ -86,12 +88,14 @@ async def get_status():
         capital      = capital,
     )
 
+    from execution.live_trader import kite_ready
     return {
         "mode":                mode,
         "capital":             round(capital, 2),
         "market_open":         is_market_open(dt),
         "trading_day":         is_trading_day(dt.date()),
-        "kite_configured":     settings.kite_configured,
+        "kite_configured":     kite_ready(),
+        "kite_api_key_set":    bool(settings.kite_api_key),
         "telegram_configured": settings.telegram_configured,
         "trading_allowed":     allowed,
         "block_reason":        block_reason,
@@ -274,10 +278,11 @@ async def switch_to_live(body: LiveModeRequest):
             status_code=400,
             detail=f"Confirmation text does not match. Required: '{_LIVE_CONFIRMATION}'"
         )
-    if not settings.kite_configured:
+    from execution.live_trader import kite_ready
+    if not kite_ready():
         raise HTTPException(
             status_code=400,
-            detail="Kite Connect not configured — set KITE_API_KEY and KITE_ACCESS_TOKEN in .env"
+            detail="Kite Connect not ready — set KITE_API_KEY/KITE_API_SECRET in .env and log in via Settings"
         )
     _set_mode("live")
     log.warning("Switched to LIVE trading mode")
@@ -330,12 +335,17 @@ async def emergency_stop():
 @router.get("/kite/login-url")
 async def kite_login_url():
     """Return the Zerodha OAuth login URL."""
+    if not settings.kite_api_key:
+        raise HTTPException(
+            status_code=400,
+            detail="KITE_API_KEY not set in backend .env"
+        )
     from kiteconnect import KiteConnect
     kite = KiteConnect(api_key=settings.kite_api_key)
     return {"url": kite.login_url()}
 
 
-@router.get("/kite/callback")
+@kite_public_router.get("/kite/callback")
 async def kite_callback(request_token: str = Query(...)):
     """
     Handle Kite Connect OAuth callback.
@@ -350,8 +360,8 @@ async def kite_callback(request_token: str = Query(...)):
         )
         access_token = data["access_token"]
         queries.set_setting("kite_access_token_session", access_token)
-        log.info("Kite access token set for session")
-        return {"access_token_set": True, "user": data.get("user_name", "")}
+        log.info("Kite access token set for session — user: %s", data.get("user_name", ""))
+        return RedirectResponse(url="/settings?kite=success")
     except Exception as exc:
         log.error("Kite callback failed: %s", exc)
-        raise HTTPException(status_code=400, detail=str(exc))
+        return RedirectResponse(url=f"/settings?kite=error&detail={exc}")

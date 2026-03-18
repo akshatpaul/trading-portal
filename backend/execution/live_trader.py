@@ -31,6 +31,17 @@ _VARIETY    = "regular"
 # Kite client factory
 # ─────────────────────────────────────────────
 
+def _get_access_token() -> str:
+    """Return access token: DB session token takes precedence over .env value."""
+    from database import queries
+    return queries.get_setting("kite_access_token_session", "") or settings.kite_access_token
+
+
+def kite_ready() -> bool:
+    """Runtime check — True if API key + access token are both available."""
+    return bool(settings.kite_api_key and _get_access_token())
+
+
 def _get_kite():
     """
     Return an authenticated KiteConnect instance.
@@ -38,14 +49,19 @@ def _get_kite():
     Raises:
         RuntimeError: if Kite credentials are not configured.
     """
-    if not settings.kite_configured:
+    if not settings.kite_api_key:
         raise RuntimeError(
             "Kite Connect not configured — set KITE_API_KEY and "
-            "KITE_ACCESS_TOKEN in .env"
+            "KITE_API_SECRET in .env"
+        )
+    access_token = _get_access_token()
+    if not access_token:
+        raise RuntimeError(
+            "No Kite access token — log in via Settings → Open Kite Login"
         )
     from kiteconnect import KiteConnect
     kite = KiteConnect(api_key=settings.kite_api_key)
-    kite.set_access_token(settings.kite_access_token)
+    kite.set_access_token(access_token)
     return kite
 
 
