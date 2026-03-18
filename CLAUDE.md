@@ -82,11 +82,17 @@ In development, Vite proxies `/api` and `/ws` to `localhost:8000`. In production
 
 | Time (IST) | Job |
 |------------|-----|
-| 08:45 AM | `run_screener()` — select top 3 Nifty 50 stocks |
+| 08:45 AM | `run_screener()` — select top 3 Nifty 50 stocks, Telegram alert |
+| 09:15 AM | `job_watchdog_screener()` — verify watchlist exists, auto-recover + Telegram alert if not |
 | 09:15–15:10 every 5min | `refresh_candles()` + `check_signals()` |
 | 15:10 PM | `force_close_all()` |
 | 15:45 PM | `send_daily_summary()` |
 | 02:00 AM daily | `purge_activity()` |
+
+**Self-healing screener (3 layers)** — no manual intervention ever needed:
+1. `main.py` startup: if past 8:45 AM and no watchlist → runs screener immediately + Telegram alert
+2. Watchdog at 9:15 AM: checks watchlist, re-runs screener if missing + Telegram alert
+3. `job_check_signals`: if still no watchlist when trying to trade → last-resort screener run
 
 ### Trading Strategy
 
@@ -161,5 +167,30 @@ Backend loads config via Pydantic Settings in `config.py`.
 ## Production Deployment
 
 - AWS EC2 (ap-south-1, Ubuntu 22.04), nginx reverse proxy, Cloudflare SSL
-- Domain: alt.akshatpaul.com
+- Domain: alt.akshatpaul.com, EC2 IP: 52.66.125.241
+- PEM key: `/Users/akshatpaul/myapps/mytrading/trading-key-aws.pem`
 - EC2 auto start/stop Mon–Fri 8:00 AM – 4:00 PM IST
+
+### CI/CD — git pre-push hook
+
+Deploying is just `git push`. The hook at `.git/hooks/pre-push` automatically:
+1. Builds the React frontend
+2. Rsyncs code to EC2 (excludes `.env`, `venv`, `node_modules`)
+3. Restarts the `trading-backend` systemd service
+
+Config stored in `.deploy.env` (git-ignored):
+```
+EC2_HOST=52.66.125.241
+EC2_PEM=/Users/akshatpaul/myapps/mytrading/trading-key-aws.pem
+```
+
+Manual deploy if needed: `./infra/deploy.sh 52.66.125.241 /Users/akshatpaul/myapps/mytrading/trading-key-aws.pem`
+
+### Activity Log visibility
+
+The activity tab shows the full day timeline:
+- `screener` events — watchlist selection at 8:45 AM
+- `system` events — market open, watchdog recovery, startup catch-up
+- `signal` events — "No entry signal for X" every 5 min + "Holding X — LTP / Target / Stop / P&L" while in position
+- `risk_block` events — when daily loss/trade limits block trading
+- `trade` events — entries and exits
