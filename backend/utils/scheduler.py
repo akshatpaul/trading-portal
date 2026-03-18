@@ -31,6 +31,13 @@ def start() -> None:
         id="screener", replace_existing=True,
     )
 
+    # Watchdog at 09:15 — verify screener ran, auto-recover + alert if not
+    scheduler.add_job(
+        job_watchdog_screener,
+        CronTrigger(hour=9, minute=15, timezone=IST, day_of_week="mon-fri"),
+        id="watchdog_screener", replace_existing=True,
+    )
+
     # Candle refresh every 5 min during market hours
     scheduler.add_job(
         job_refresh_candles,
@@ -105,6 +112,33 @@ async def job_run_screener():
         log.error("job_run_screener failed: %s", exc)
 
 
+async def job_watchdog_screener():
+    """09:15 — Verify watchlist was populated; auto-recover and alert if not."""
+    from utils.helpers import is_trading_day, today_ist
+    if not is_trading_day(today_ist()):
+        return
+    try:
+        from database.queries import get_watchlist, log_activity
+        from alerts.telegram import send_screener_recovered, send_screener_failed
+        if get_watchlist(today_ist().isoformat()):
+            return  # all good
+        log.warning("Watchdog: no watchlist found at 9:15 AM — screener missed, recovering")
+        log_activity("system", "Watchdog: screener was missed, running now")
+        from strategy.screener import run_screener
+        symbols = run_screener()
+        if symbols:
+            log.info("Watchdog: screener recovered — %s", symbols)
+            await send_screener_recovered(symbols)
+            from api.websocket import manager
+            await manager.broadcast("watchlist_update", {"symbols": symbols})
+        else:
+            log.error("Watchdog: screener ran but no stocks passed filters")
+            log_activity("system", "Watchdog: screener recovered but no stocks passed filters today")
+            await send_screener_failed()
+    except Exception as exc:
+        log.error("job_watchdog_screener failed: %s", exc)
+
+
 async def job_refresh_candles():
     """Every 5 min — Fetch latest 5-min candles for watchlist symbols."""
     from utils.helpers import is_trading_day, today_ist, is_market_open, now_ist
@@ -129,6 +163,23 @@ async def job_check_signals():
         return
 
     try:
+        # Last-resort recovery: if watchlist still missing, run screener now
+        from strategy.screener import get_todays_watchlist
+        if not get_todays_watchlist():
+            from strategy.screener import run_screener
+            from database.queries import log_activity
+            from alerts.telegram import send_screener_recovered, send_screener_failed
+            log.warning("Signal check: no watchlist — running screener now")
+            log_activity("system", "Signal check: no watchlist found, running screener")
+            symbols = run_screener()
+            if symbols:
+                await send_screener_recovered(symbols)
+                from api.websocket import manager as _ws
+                await _ws.broadcast("watchlist_update", {"symbols": symbols})
+            else:
+                await send_screener_failed()
+                return  # nothing to trade
+
         from strategy.screener import get_todays_watchlist
         from data.historical import fetch_and_cache
         from strategy.signals import check_entry_signal, check_exit_signal

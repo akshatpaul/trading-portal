@@ -70,6 +70,26 @@ async def on_startup():
     scheduler_start()
     log.info("Scheduler started")
 
+    # If the screener was missed (server started after 8:45 AM), run it now
+    from utils.helpers import today_ist, now_ist, is_trading_day
+    from datetime import time as _time
+    _now = now_ist()
+    if is_trading_day(_now.date()) and _now.time() >= _time(8, 45):
+        from database import queries as _q
+        if not _q.get_watchlist(today_ist().isoformat()):
+            log.info("No watchlist for today — running screener on startup")
+            import asyncio
+            from utils.scheduler import job_run_screener
+            from alerts.telegram import send_screener_recovered
+
+            async def _recover():
+                from strategy.screener import run_screener
+                symbols = run_screener()
+                if symbols:
+                    await send_screener_recovered(symbols)
+
+            asyncio.ensure_future(_recover())
+
     mode = settings.app_mode.upper()
     log.info("Trading Portal starting in %s mode", mode)
 

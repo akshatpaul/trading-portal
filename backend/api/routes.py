@@ -118,6 +118,16 @@ async def get_watchlist():
     return {"date": date_str, "watchlist": rows}
 
 
+@router.post("/screener/run")
+async def trigger_screener():
+    """Manually trigger the pre-market screener to populate today's watchlist."""
+    from utils.scheduler import job_run_screener
+    from utils.helpers import today_ist
+    await job_run_screener()
+    rows = queries.get_watchlist(today_ist().isoformat())
+    return {"triggered": True, "symbols": [r["symbol"] for r in rows], "watchlist": rows}
+
+
 # ─────────────────────────────────────────────
 # Positions
 # ─────────────────────────────────────────────

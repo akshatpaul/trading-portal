@@ -117,4 +117,9 @@ export async function fetchKiteLoginUrl() {
   return data
 }
 
+export async function runScreener() {
+  const { data } = await api.post('/api/screener/run')
+  return data
+}
+
 export default api

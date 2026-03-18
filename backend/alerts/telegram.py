@@ -90,6 +90,23 @@ async def send_watchlist(symbols: list[str]) -> None:
     )
 
 
+async def send_screener_recovered(symbols: list[str]) -> None:
+    """Alert when watchdog auto-recovers a missed screener."""
+    names = ", ".join(s.replace(".NS", "") for s in symbols) if symbols else "none"
+    await send_message(
+        f"⚠️ <b>Screener was missed at 8:45 AM — auto-recovered</b>\n"
+        f"Watchlist: {names}"
+    )
+
+
+async def send_screener_failed() -> None:
+    """Alert when watchdog finds no watchlist and screener also produces nothing."""
+    await send_message(
+        "🔴 <b>Screener failed — no watchlist for today</b>\n"
+        "No stocks passed filters. Bot will not trade today."
+    )
+
+
 # ─────────────────────────────────────────────
 # Signals
 # ─────────────────────────────────────────────

@@ -1,7 +1,8 @@
-import { useQuery } from '@tanstack/react-query'
-import { fetchRiskLimits, fetchKiteLoginUrl, setModePaper } from '../api'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { fetchRiskLimits, fetchKiteLoginUrl, setModePaper, runScreener } from '../api'
 import { useApp } from '../context/AppContext'
 import { formatINR } from '../utils/formatters'
+import { useState } from 'react'
 
 function LimitRow({ label, value }) {
   return (
@@ -17,6 +18,9 @@ export default function Settings() {
     status, refetchStatus, toast,
     setShowLiveModeModal,
   } = useApp()
+
+  const queryClient = useQueryClient()
+  const [screenerLoading, setScreenerLoading] = useState(false)
 
   const riskQ = useQuery({
     queryKey: ['risk-limits'],
@@ -37,6 +41,21 @@ export default function Settings() {
       refetchStatus()
     } catch (err) {
       toast.error(`Failed to switch: ${err?.response?.data?.detail || err.message}`)
+    }
+  }
+
+  async function handleRunScreener() {
+    setScreenerLoading(true)
+    try {
+      const result = await runScreener()
+      const symbols = result.symbols?.join(', ') || 'none'
+      toast.success(`Screener complete — watchlist: ${symbols}`)
+      queryClient.invalidateQueries({ queryKey: ['watchlist'] })
+      queryClient.invalidateQueries({ queryKey: ['activity'] })
+    } catch (err) {
+      toast.error(`Screener failed: ${err?.response?.data?.detail || err.message}`)
+    } finally {
+      setScreenerLoading(false)
     }
   }
 
@@ -148,6 +167,26 @@ export default function Settings() {
             ? 'Telegram bot is configured. You will receive trade alerts.'
             : 'Configure TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID in your backend .env file to enable alerts.'}
         </p>
+      </div>
+
+      {/* Bot Controls */}
+      <div className="card">
+        <h3 className="font-semibold text-text-primary mb-4">Bot Controls</h3>
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm text-text-primary font-medium">Run Screener Now</p>
+            <p className="text-xs text-text-muted mt-0.5">
+              Manually populate today's watchlist (runs automatically at 8:45 AM IST)
+            </p>
+          </div>
+          <button
+            onClick={handleRunScreener}
+            disabled={screenerLoading}
+            className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+          >
+            {screenerLoading ? 'Running...' : 'Run Screener'}
+          </button>
+        </div>
       </div>
 
       {/* Risk Limits */}
