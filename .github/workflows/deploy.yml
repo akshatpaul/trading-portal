@@ -26,6 +26,7 @@ jobs:
           npm run build
 
       - name: Deploy to EC2
+        continue-on-error: true
         env:
           EC2_HOST: ${{ secrets.EC2_HOST }}
           EC2_SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
