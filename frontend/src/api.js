@@ -117,6 +117,21 @@ export async function fetchKiteLoginUrl() {
   return data
 }
 
+export async function fetchKiteProfile() {
+  const { data } = await api.get('/api/kite/profile')
+  return data
+}
+
+export async function fetchKiteFunds() {
+  const { data } = await api.get('/api/kite/funds')
+  return data
+}
+
+export async function fetchKiteHoldings() {
+  const { data } = await api.get('/api/kite/holdings')
+  return data
+}
+
 export async function runScreener() {
   const { data } = await api.post('/api/screener/run')
   return data

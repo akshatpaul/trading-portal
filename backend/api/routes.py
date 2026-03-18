@@ -332,6 +332,44 @@ async def emergency_stop():
 # Kite Connect auth
 # ─────────────────────────────────────────────
 
+@router.get("/kite/profile")
+async def kite_profile():
+    """Kite user profile — name, email, exchanges, products."""
+    from execution.live_trader import kite_ready, get_kite_profile
+    if not kite_ready():
+        raise HTTPException(status_code=400, detail="Kite not connected")
+    profile = get_kite_profile()
+    if not profile:
+        raise HTTPException(status_code=502, detail="Failed to fetch profile from Kite")
+    return profile
+
+
+@router.get("/kite/funds")
+async def kite_funds():
+    """Available funds and margins from Zerodha."""
+    from execution.live_trader import kite_ready, _get_kite
+    if not kite_ready():
+        raise HTTPException(status_code=400, detail="Kite not connected")
+    try:
+        kite = _get_kite()
+        return kite.margins()
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=str(exc))
+
+
+@router.get("/kite/holdings")
+async def kite_holdings():
+    """Long-term portfolio holdings from Zerodha demat account."""
+    from execution.live_trader import kite_ready, _get_kite
+    if not kite_ready():
+        raise HTTPException(status_code=400, detail="Kite not connected")
+    try:
+        kite = _get_kite()
+        return {"holdings": kite.holdings()}
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=str(exc))
+
+
 @router.get("/kite/login-url")
 async def kite_login_url():
     """Return the Zerodha OAuth login URL."""

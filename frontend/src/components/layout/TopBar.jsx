@@ -93,6 +93,7 @@ export default function TopBar({ onLogout }) {
     { id: 'performance', label: 'Performance' },
     { id: 'activity',    label: 'Activity' },
     { id: 'strategies',  label: 'Strategies' },
+    { id: 'kite',        label: 'Kite' },
     { id: 'settings',    label: 'Settings' },
   ]
 

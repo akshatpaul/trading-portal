@@ -8,6 +8,7 @@ import Performance from './pages/Performance'
 import Settings from './pages/Settings'
 import Strategies from './pages/Strategies'
 import Activity from './pages/Activity'
+import Kite from './pages/Kite'
 import EmergencyStopModal from './components/modals/EmergencyStop'
 import LiveModeConfirmModal from './components/modals/LiveModeConfirm'
 import { useApp } from './context/AppContext'
@@ -22,6 +23,7 @@ function PageContent() {
     case 'performance': return <Performance />
     case 'strategies':  return <Strategies />
     case 'activity':    return <Activity />
+    case 'kite':        return <Kite />
     case 'settings':    return <Settings />
     default:            return <Dashboard />
   }
