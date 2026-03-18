@@ -1,4 +1,5 @@
 import { useApp } from '../context/AppContext'
+import { fetchKiteLoginUrl } from '../api'
 import CapitalCard from '../components/cards/CapitalCard'
 import PnLCard from '../components/cards/PnLCard'
 import WinRateCard from '../components/cards/WinRateCard'
@@ -17,11 +18,23 @@ export default function Dashboard() {
     chartSymbol,
     setChartSymbol,
     setActiveTab,
+    toast,
   } = useApp()
 
-  const mode    = status?.mode ?? 'paper'
-  const capital = status?.capital ?? 0
-  const today   = status?.today ?? {}
+  const mode       = status?.mode ?? 'paper'
+  const capital    = status?.capital ?? 0
+  const today      = status?.today ?? {}
+  const kiteKeySet = status?.kite_api_key_set ?? false
+  const kiteOk     = status?.kite_configured ?? false
+
+  async function handleKiteLogin() {
+    try {
+      const { url } = await fetchKiteLoginUrl()
+      window.open(url, '_blank')
+    } catch (err) {
+      toast.error(`Failed to get Kite login URL: ${err.message}`)
+    }
+  }
 
   function handleSelectSymbol(sym) {
     setChartSymbol(sym)
@@ -36,6 +49,23 @@ export default function Dashboard() {
                         text-amber-400 text-sm font-medium flex items-center gap-2">
           <span>📝</span>
           <span>Paper Trading Mode — Simulated capital, no real orders</span>
+        </div>
+      )}
+
+      {/* Kite token expired banner */}
+      {kiteKeySet && !kiteOk && (
+        <div className="bg-red-950/60 border border-red-800/60 rounded-xl px-4 py-2.5
+                        text-red-300 text-sm font-medium flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <span>🔑</span>
+            <span>Kite token expired — re-login to enable live trading</span>
+          </div>
+          <button
+            onClick={handleKiteLogin}
+            className="text-xs bg-red-700 hover:bg-red-600 text-white px-3 py-1 rounded-lg transition-colors whitespace-nowrap"
+          >
+            Login to Kite →
+          </button>
         </div>
       )}
 

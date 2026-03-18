@@ -24,6 +24,13 @@ scheduler = AsyncIOScheduler(timezone=IST)
 
 def start() -> None:
     """Register all jobs and start the scheduler."""
+    # Kite login reminder at 08:30 (only if API key is configured)
+    scheduler.add_job(
+        job_kite_login_reminder,
+        CronTrigger(hour=8, minute=30, timezone=IST, day_of_week="mon-fri"),
+        id="kite_login_reminder", replace_existing=True,
+    )
+
     # Pre-market screener at 08:45
     scheduler.add_job(
         job_run_screener,
@@ -91,6 +98,23 @@ def stop() -> None:
 
 
 # ── Job functions ─────────────────────────────
+
+async def job_kite_login_reminder():
+    """08:30 — Send Telegram reminder with direct Kite login link."""
+    from utils.helpers import is_trading_day, today_ist
+    if not is_trading_day(today_ist()):
+        return
+    from config import settings
+    if not settings.kite_api_key:
+        return  # Kite not configured at all
+    try:
+        from alerts.telegram import send_kite_login_reminder
+        login_url = f"https://kite.zerodha.com/connect/login?api_key={settings.kite_api_key}&v=3"
+        await send_kite_login_reminder(login_url)
+        log.info("Kite login reminder sent")
+    except Exception as exc:
+        log.error("job_kite_login_reminder failed: %s", exc)
+
 
 async def job_run_screener():
     """08:45 — Pre-market screener: select today's watchlist."""

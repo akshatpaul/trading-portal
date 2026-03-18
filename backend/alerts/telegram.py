@@ -90,6 +90,16 @@ async def send_watchlist(symbols: list[str]) -> None:
     )
 
 
+async def send_kite_login_reminder(login_url: str) -> None:
+    """8:30 AM reminder with direct Kite login link."""
+    await send_message(
+        f"🔑 <b>Kite login required for today's trading</b>\n\n"
+        f"Tap the link below to authenticate with Zerodha.\n"
+        f"Token will be stored automatically — no portal login needed.\n\n"
+        f'<a href="{login_url}">👉 Login to Kite Connect</a>'
+    )
+
+
 async def send_screener_recovered(symbols: list[str]) -> None:
     """Alert when watchdog auto-recovers a missed screener."""
     names = ", ".join(s.replace(".NS", "") for s in symbols) if symbols else "none"
