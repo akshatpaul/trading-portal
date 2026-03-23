@@ -260,48 +260,59 @@ async def get_performance():
 @router.get("/market-ticker")
 async def market_ticker():
     """
-    Live market ticker (15-min delayed via yfinance):
-      - Sensex (^BSESN): current price + change vs previous close
-      - Gold 24k per 10g INR: GOLDIETF.NS × 10 (1 unit ≈ 1g, tracks domestic price incl. duty/GST)
+    Live market ticker using yfinance fast_info (avoids history API stale-data issues):
+      - Sensex (^BSESN): last_price + previous_close for accurate intraday change
+      - Gold 24k per 10g INR: GOLDIETF.NS × 10 (1 unit ≈ 1g, domestic price incl. duty/GST)
       - GOLDIETF (GOLDIETF.NS): ICICI Prudential Gold ETF per unit
     """
-    from data.yfinance_client import get_daily_candles, get_latest_price
-    from utils.helpers import today_ist
-    import pandas as pd
-
-    today = today_ist()
+    import yfinance as yf
 
     def _stats(sym: str, price_scale: float = 1.0) -> dict | None:
         """
-        Fetch current price and change vs previous *completed* day's close.
-        price_scale: multiply price by this (e.g. 10 for gold per-10g).
-        Uses daily candles filtered to completed days to avoid today's partial candle
-        contaminating the prev_close calculation.
+        Use fast_info to get last_price and previous_close directly.
+        This avoids the history() API returning stale previous-session data
+        for indices like ^BSESN that don't have reliable 5-min intraday on yfinance.
+        Falls back to history-based approach if fast_info is unavailable.
         """
-        price = get_latest_price(sym)
-        df    = get_daily_candles(sym, period="5d")
-        if price is None and df.empty:
-            return None
-        current = price if price is not None else float(df["close"].iloc[-1])
+        try:
+            fi = yf.Ticker(sym).fast_info
+            price      = fi.last_price
+            prev_close = fi.previous_close
+            if price is not None and prev_close is not None:
+                change = (price - prev_close) * price_scale
+                pct    = ((price - prev_close) / prev_close * 100) if prev_close else 0.0
+                return {
+                    "price":  round(price * price_scale, 2),
+                    "change": round(change, 2),
+                    "pct":    round(pct, 2),
+                }
+        except Exception as exc:
+            log.warning("market_ticker fast_info(%s): %s — falling back to history", sym, exc)
 
-        # Filter to completed days only — today's partial candle skews prev_close to ~0 change
-        prev_close = None
-        if not df.empty:
+        # Fallback: use daily history, compare latest vs completed prev day
+        try:
+            from data.yfinance_client import get_daily_candles
+            from utils.helpers import today_ist
+            import pandas as pd
+            today = today_ist()
+            df = get_daily_candles(sym, period="5d")
+            if df.empty:
+                return None
             completed = df[pd.DatetimeIndex(df.index).date < today]
-            if not completed.empty:
-                prev_close = float(completed["close"].iloc[-1])
-
-        current_scaled = current * price_scale
-        if prev_close is None:
-            return {"price": round(current_scaled, 2), "change": 0.0, "pct": 0.0}
-
-        change = (current - prev_close) * price_scale
-        pct    = ((current - prev_close) / prev_close * 100) if prev_close else 0.0
-        return {
-            "price":  round(current_scaled, 2),
-            "change": round(change, 2),
-            "pct":    round(pct, 2),
-        }
+            if completed.empty or len(df) < 2:
+                return None
+            current    = float(df["close"].iloc[-1])
+            prev_close = float(completed["close"].iloc[-1])
+            change     = (current - prev_close) * price_scale
+            pct        = ((current - prev_close) / prev_close * 100) if prev_close else 0.0
+            return {
+                "price":  round(current * price_scale, 2),
+                "change": round(change, 2),
+                "pct":    round(pct, 2),
+            }
+        except Exception as exc:
+            log.warning("market_ticker history fallback(%s): %s", sym, exc)
+            return None
 
     sensex   = _stats("^BSESN")
     gold_10g = _stats("GOLDIETF.NS", price_scale=10)  # 1 unit ≈ 1g → ×10 = per 10g
