@@ -82,17 +82,21 @@ In development, Vite proxies `/api` and `/ws` to `localhost:8000`. In production
 
 | Time (IST) | Job |
 |------------|-----|
-| 08:45 AM | `run_screener()` — select top 3 Nifty 50 stocks, Telegram alert |
+| 08:30 AM | `job_kite_login_reminder()` — Telegram link to authenticate Kite Connect (if API key configured) |
+| 08:45 AM | `job_run_screener()` — select top 3 Nifty 50 stocks, Telegram alert |
 | 09:15 AM | `job_watchdog_screener()` — verify watchlist exists, auto-recover + Telegram alert if not |
-| 09:15–15:10 every 5min | `refresh_candles()` + `check_signals()` |
-| 15:10 PM | `force_close_all()` |
-| 15:45 PM | `send_daily_summary()` |
-| 02:00 AM daily | `purge_activity()` |
+| 09:20 AM | `job_market_snapshot()` — Telegram snapshot of Nifty 50 / Sensex / Bank Nifty / India VIX opens |
+| 11:00 AM | `job_late_watchdog()` — last-resort: run screener + Telegram alert if still no watchlist |
+| 09:15–15:10 every 5min | `job_refresh_candles()` + `job_check_signals()` |
+| 15:10 PM | `job_force_close()` |
+| 15:45 PM | `job_daily_summary()` |
+| 02:00 AM daily | `job_purge_activity()` |
 
-**Self-healing screener (3 layers)** — no manual intervention ever needed:
+**Self-healing screener (4 layers)** — no manual intervention ever needed:
 1. `main.py` startup: if past 8:45 AM and no watchlist → runs screener immediately + Telegram alert
 2. Watchdog at 9:15 AM: checks watchlist, re-runs screener if missing + Telegram alert
-3. `job_check_signals`: if still no watchlist when trying to trade → last-resort screener run
+3. Late watchdog at 11:00 AM: checks again, runs screener if still missing + Telegram alert
+4. `job_check_signals`: if still no watchlist when trying to trade → last-resort screener run
 
 ### Trading Strategy
 

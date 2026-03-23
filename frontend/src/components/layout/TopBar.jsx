@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useApp } from '../../context/AppContext'
-import { emergencyStop } from '../../api'
+import { emergencyStop, fetchMarketTicker } from '../../api'
 import { formatINR, formatPnL } from '../../utils/formatters'
 
 function ISTClock() {
@@ -65,6 +65,24 @@ function PnLSparkline({ trades }) {
   )
 }
 
+function TickerItem({ label, data, formatPrice }) {
+  if (!data) return null
+  const up    = data.change >= 0
+  const color = up ? 'text-emerald-400' : 'text-red-400'
+  const arrow = up ? '▲' : '▼'
+  return (
+    <div className="flex items-center gap-1.5">
+      <span className="text-text-muted text-xs">{label}</span>
+      <span className={`font-mono text-xs font-semibold ${color}`}>
+        {formatPrice(data.price)}
+      </span>
+      <span className={`font-mono text-xs ${color}`}>
+        {arrow}{Math.abs(data.pct).toFixed(2)}%
+      </span>
+    </div>
+  )
+}
+
 export default function TopBar({ onLogout }) {
   const {
     status, wsConnected,
@@ -73,6 +91,21 @@ export default function TopBar({ onLogout }) {
     activeTab, setActiveTab,
     toast,
   } = useApp()
+
+  const [ticker, setTicker] = useState(null)
+
+  useEffect(() => {
+    let cancelled = false
+    async function load() {
+      try {
+        const data = await fetchMarketTicker()
+        if (!cancelled) setTicker(data)
+      } catch {}
+    }
+    load()
+    const id = setInterval(load, 60_000)
+    return () => { cancelled = true; clearInterval(id) }
+  }, [])
 
   const mode        = status?.mode ?? 'paper'
   const capital     = status?.capital ?? 0
@@ -202,6 +235,33 @@ export default function TopBar({ onLogout }) {
           )}
         </div>
       </div>
+
+      {/* Market ticker strip */}
+      {ticker && (
+        <div className="hidden md:flex items-center gap-5 py-1.5 border-t border-slate-800/60 text-xs">
+          <TickerItem
+            label="SENSEX"
+            data={ticker.sensex}
+            formatPrice={p => p?.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+          />
+          {ticker.sensex && ticker.gold_24k_per_10g && (
+            <span className="text-slate-700">|</span>
+          )}
+          <TickerItem
+            label="Gold 24k/10g"
+            data={ticker.gold_24k_per_10g}
+            formatPrice={p => `₹${p?.toLocaleString('en-IN')}`}
+          />
+          {ticker.gold_24k_per_10g && ticker.goldbees && (
+            <span className="text-slate-700">|</span>
+          )}
+          <TickerItem
+            label="GOLDBEES"
+            data={ticker.goldbees}
+            formatPrice={p => `₹${p?.toFixed(2)}`}
+          />
+        </div>
+      )}
 
       {/* Tab navigation */}
       <nav className="flex items-center gap-1 -mb-px overflow-x-auto">

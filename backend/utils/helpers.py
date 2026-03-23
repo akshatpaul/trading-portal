@@ -18,7 +18,7 @@ IST = pytz.timezone("Asia/Kolkata")
 # Source: NSE India official calendar
 NSE_HOLIDAYS_2026: set[date] = {
     date(2026, 1, 26),   # Republic Day
-    date(2026, 3, 20),   # Holi
+    date(2026, 3, 19),   # Holi
     date(2026, 4, 2),    # Ram Navami (tentative)
     date(2026, 4, 3),    # Good Friday
     date(2026, 4, 14),   # Dr. Ambedkar Jayanti

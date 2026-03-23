@@ -10,6 +10,7 @@ Endpoints:
   GET  /api/candles/{symbol}    — OHLCV data for chart
   GET  /api/performance         — aggregate stats
   GET  /api/risk-limits         — hardcoded safety limits
+  GET  /api/market-ticker       — Sensex, Gold 24k/10g, GoldBees live prices
   POST /api/mode/live           — switch to live mode (needs confirmation)
   POST /api/mode/paper          — switch back to paper
   POST /api/emergency-stop      — close all positions, pause bot
@@ -254,6 +255,58 @@ async def get_candles(
 async def get_performance():
     """Aggregate performance stats + personal bests."""
     return queries.get_performance_stats()
+
+
+@router.get("/market-ticker")
+async def market_ticker():
+    """
+    Live market ticker (15-min delayed via yfinance):
+      - Sensex: current price + change vs previous close
+      - Gold 24k per 10g in INR: derived from COMEX GC=F × USDINR=X
+      - GoldBees ETF (GOLDBEES.NS): current price + change
+    """
+    from data.yfinance_client import get_daily_candles, get_latest_price
+
+    TROY_OZ_TO_GRAMS = 31.1035
+
+    def _stats(sym: str) -> dict | None:
+        """Fetch current price and change vs previous close for any yfinance symbol."""
+        price = get_latest_price(sym)
+        df    = get_daily_candles(sym, period="5d")
+        if price is None and df.empty:
+            return None
+        current = price if price is not None else float(df["close"].iloc[-1])
+        if df.empty:
+            return {"price": round(current, 2), "change": 0.0, "pct": 0.0}
+        prev_close = float(df["close"].iloc[-1])
+        change     = current - prev_close
+        pct        = (change / prev_close * 100) if prev_close else 0.0
+        return {"price": round(current, 2), "change": round(change, 2), "pct": round(pct, 2)}
+
+    sensex   = _stats("^BSESN")
+    goldbees = _stats("GOLDBEES.NS")
+
+    # 24k gold per 10g in INR = (COMEX USD/oz ÷ 31.1035) × 10 × USDINR
+    gold_usd  = get_latest_price("GC=F")
+    usdinr    = get_latest_price("USDINR=X")
+    gold_df   = get_daily_candles("GC=F", period="5d")
+    gold_inr  = None
+    if gold_usd and usdinr:
+        per_10g_inr = (gold_usd / TROY_OZ_TO_GRAMS) * 10 * usdinr
+        if not gold_df.empty:
+            prev_usd    = float(gold_df["close"].iloc[-1])
+            change_usd  = gold_usd - prev_usd
+            change_inr  = (change_usd / TROY_OZ_TO_GRAMS) * 10 * usdinr
+            pct         = (change_usd / prev_usd * 100) if prev_usd else 0.0
+        else:
+            change_inr, pct = 0.0, 0.0
+        gold_inr = {
+            "price":  round(per_10g_inr),
+            "change": round(change_inr),
+            "pct":    round(pct, 2),
+        }
+
+    return {"sensex": sensex, "gold_24k_per_10g": gold_inr, "goldbees": goldbees}
 
 
 @router.get("/risk-limits")

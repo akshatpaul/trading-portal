@@ -1,4 +1,6 @@
+import { useState } from 'react'
 import { useApp } from '../../context/AppContext'
+import { runScreener } from '../../api'
 import { formatSymbol } from '../../utils/formatters'
 
 function ScoreBar({ score, max = 100 }) {
@@ -15,7 +17,25 @@ function ScoreBar({ score, max = 100 }) {
 }
 
 export default function Watchlist({ onSelectSymbol }) {
-  const { watchlist } = useApp()
+  const { watchlist, refetchWatchlist, toast } = useApp()
+  const [running, setRunning] = useState(false)
+
+  async function handleRunScreener() {
+    setRunning(true)
+    try {
+      const result = await runScreener()
+      await refetchWatchlist()
+      if (result.symbols?.length) {
+        toast.success(`Screener done — ${result.symbols.map(s => s.replace('.NS', '')).join(', ')}`)
+      } else {
+        toast.error('Screener ran but no stocks passed filters')
+      }
+    } catch (err) {
+      toast.error(`Screener failed: ${err.message}`)
+    } finally {
+      setRunning(false)
+    }
+  }
 
   if (!watchlist || watchlist.length === 0) {
     return (
@@ -25,6 +45,14 @@ export default function Watchlist({ onSelectSymbol }) {
           <span className="text-2xl opacity-40 mb-2">📋</span>
           <p className="text-text-muted text-sm">No watchlist yet</p>
           <p className="text-text-muted text-xs mt-1">Screener runs before market open</p>
+          <button
+            onClick={handleRunScreener}
+            disabled={running}
+            className="mt-4 px-4 py-1.5 text-xs font-medium rounded-lg bg-signal/20 text-signal
+                       hover:bg-signal/30 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            {running ? 'Running…' : 'Run Screener Now'}
+          </button>
         </div>
       </div>
     )
@@ -34,7 +62,18 @@ export default function Watchlist({ onSelectSymbol }) {
     <div className="card">
       <div className="flex items-center justify-between mb-3">
         <h3 className="font-semibold text-sm text-text-primary">Today's Watchlist</h3>
-        <span className="text-text-muted text-xs">{watchlist.length} stocks</span>
+        <div className="flex items-center gap-3">
+          <span className="text-text-muted text-xs">{watchlist.length} stocks</span>
+          <button
+            onClick={handleRunScreener}
+            disabled={running}
+            className="text-xs text-signal hover:text-signal/70 disabled:opacity-40
+                       disabled:cursor-not-allowed transition-colors"
+            title="Re-run screener"
+          >
+            {running ? 'Running…' : '↺ Re-run'}
+          </button>
+        </div>
       </div>
 
       <div className="space-y-2">

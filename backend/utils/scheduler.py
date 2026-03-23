@@ -3,7 +3,10 @@ utils/scheduler.py — APScheduler job definitions
 
 Schedule (all times IST / Asia/Kolkata):
   08:45  — run_screener()         : select today's watchlist
+  09:15  — watchdog_screener()    : verify watchlist, auto-recover
+  09:20  — market_snapshot()      : Telegram market open stats (Nifty/Sensex/BankNifty/VIX)
   09:15–15:10 every 5 min — refresh_candles() + check_signals()
+  11:00  — late_watchdog()        : last-resort check — run screener if still no watchlist at 11 AM
   15:10  — force_close_all()      : close any open position
   15:45  — send_daily_summary()   : Telegram summary
 
@@ -43,6 +46,20 @@ def start() -> None:
         job_watchdog_screener,
         CronTrigger(hour=9, minute=15, timezone=IST, day_of_week="mon-fri"),
         id="watchdog_screener", replace_existing=True,
+    )
+
+    # Late watchdog at 11:00 — last-resort screener if still no watchlist
+    scheduler.add_job(
+        job_late_watchdog,
+        CronTrigger(hour=11, minute=0, timezone=IST, day_of_week="mon-fri"),
+        id="late_watchdog", replace_existing=True,
+    )
+
+    # Market snapshot at 09:20 — Telegram summary of index opens
+    scheduler.add_job(
+        job_market_snapshot,
+        CronTrigger(hour=9, minute=20, timezone=IST, day_of_week="mon-fri"),
+        id="market_snapshot", replace_existing=True,
     )
 
     # Candle refresh every 5 min during market hours
@@ -273,6 +290,81 @@ async def job_check_signals():
 
     except Exception as exc:
         log.error("job_check_signals failed: %s", exc)
+
+
+async def job_late_watchdog():
+    """11:00 — If still no watchlist, run screener as last resort and alert."""
+    from utils.helpers import is_trading_day, today_ist
+    if not is_trading_day(today_ist()):
+        return
+    try:
+        from database.queries import get_watchlist, log_activity
+        rows = get_watchlist(today_ist().isoformat())
+        if rows:
+            return  # all good, nothing to do
+        log.warning("Late watchdog (11 AM): no watchlist found — running screener now")
+        log_activity("system", "Late watchdog (11 AM): no watchlist, running screener")
+        from strategy.screener import run_screener
+        from alerts.telegram import send_screener_recovered, send_screener_failed
+        symbols = run_screener()
+        if symbols:
+            log.info("Late watchdog: screener recovered — %s", symbols)
+            await send_screener_recovered(symbols)
+            from api.websocket import manager
+            await manager.broadcast("watchlist_update", {"symbols": symbols})
+        else:
+            log.error("Late watchdog: screener ran but no stocks passed filters")
+            log_activity("system", "Late watchdog: screener ran but no stocks passed filters")
+            await send_screener_failed()
+    except Exception as exc:
+        log.error("job_late_watchdog failed: %s", exc)
+
+
+async def job_market_snapshot():
+    """09:20 — Fetch Nifty 50 / Sensex / Bank Nifty / India VIX and send Telegram snapshot."""
+    from utils.helpers import is_trading_day, today_ist
+    if not is_trading_day(today_ist()):
+        return
+    try:
+        from data.yfinance_client import get_daily_candles
+        from alerts.telegram import send_market_snapshot
+
+        INDICES = [
+            ("^NSEI",    "Nifty 50"),
+            ("^BSESN",   "Sensex"),
+            ("^NSEBANK", "Bank Nifty"),
+            ("^INDIAVIX","India VIX"),
+        ]
+
+        snapshot = []
+        for sym, name in INDICES:
+            df = get_daily_candles(sym, period="2d")
+            if df.empty or len(df) < 2:
+                log.warning("market_snapshot: not enough data for %s", sym)
+                continue
+            prev_close = float(df["close"].iloc[-2])
+            today_open = float(df["open"].iloc[-1])
+            today_high = float(df["high"].iloc[-1])
+            today_low  = float(df["low"].iloc[-1])
+            change     = today_open - prev_close
+            pct        = (change / prev_close) * 100 if prev_close else 0.0
+            is_vix     = sym == "^INDIAVIX"
+            snapshot.append({
+                "name":   name,
+                "price":  today_open,
+                "change": change,
+                "pct":    pct,
+                "high":   None if is_vix else today_high,
+                "low":    None if is_vix else today_low,
+            })
+
+        if snapshot:
+            await send_market_snapshot(snapshot)
+            log.info("Market snapshot sent (%d indices)", len(snapshot))
+        else:
+            log.warning("market_snapshot: no data fetched, skipping Telegram message")
+    except Exception as exc:
+        log.error("job_market_snapshot failed: %s", exc)
 
 
 async def job_force_close():

@@ -100,6 +100,59 @@ async def send_kite_login_reminder(login_url: str) -> None:
     )
 
 
+async def send_market_snapshot(indices: list[dict]) -> None:
+    """
+    9:20 AM market open snapshot.
+
+    Each dict in indices:
+        name   : display name, e.g. "Nifty 50"
+        price  : today's open price
+        change : open − prev_close
+        pct    : % change
+        high   : day high (None for VIX)
+        low    : day low  (None for VIX)
+    """
+    from datetime import datetime
+    import pytz
+    IST = pytz.timezone("Asia/Kolkata")
+    date_str = datetime.now(IST).strftime("%a %d %b")
+
+    lines = [f"📈 <b>Market Open — {date_str}</b>\n"]
+    for idx in indices:
+        name   = idx["name"]
+        price  = idx["price"]
+        change = idx["change"]
+        pct    = idx["pct"]
+        high   = idx.get("high")
+        low    = idx.get("low")
+
+        up      = change >= 0
+        arrow   = "🟢" if up else "🔴"
+        sign    = "+" if up else "−"
+        abs_chg = abs(change)
+        abs_pct = abs(pct)
+
+        # price formatting: VIX uses 1 decimal, indices use 0
+        if price < 100:
+            price_str = f"{price:.1f}"
+            chg_str   = f"{abs_chg:.1f}"
+        else:
+            price_str = f"{price:,.0f}"
+            chg_str   = f"{abs_chg:,.0f}"
+
+        lines.append(
+            f"{arrow} <b>{name}</b>  {price_str}  {sign}{chg_str}  ({sign}{abs_pct:.2f}%)"
+        )
+        if high is not None and low is not None:
+            if price < 100:
+                lines.append(f"    H: {high:.1f}  L: {low:.1f}")
+            else:
+                lines.append(f"    H: {high:,.0f}  L: {low:,.0f}")
+        lines.append("")  # blank line between indices
+
+    await send_message("\n".join(lines).rstrip())
+
+
 async def send_screener_recovered(symbols: list[str]) -> None:
     """Alert when watchdog auto-recovers a missed screener."""
     names = ", ".join(s.replace(".NS", "") for s in symbols) if symbols else "none"

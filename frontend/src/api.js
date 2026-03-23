@@ -137,6 +137,11 @@ export async function fetchKiteMFHoldings() {
   return data
 }
 
+export async function fetchMarketTicker() {
+  const { data } = await api.get('/api/market-ticker')
+  return data
+}
+
 export async function runScreener() {
   const { data } = await api.post('/api/screener/run')
   return data
