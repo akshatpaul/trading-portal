@@ -261,52 +261,53 @@ async def get_performance():
 async def market_ticker():
     """
     Live market ticker (15-min delayed via yfinance):
-      - Sensex: current price + change vs previous close
-      - Gold 24k per 10g in INR: derived from COMEX GC=F × USDINR=X
-      - GoldBees ETF (GOLDBEES.NS): current price + change
+      - Sensex (^BSESN): current price + change vs previous close
+      - Gold 24k per 10g INR: GOLDIETF.NS × 10 (1 unit ≈ 1g, tracks domestic price incl. duty/GST)
+      - GOLDIETF (GOLDIETF.NS): ICICI Prudential Gold ETF per unit
     """
     from data.yfinance_client import get_daily_candles, get_latest_price
+    from utils.helpers import today_ist
+    import pandas as pd
 
-    TROY_OZ_TO_GRAMS = 31.1035
+    today = today_ist()
 
-    def _stats(sym: str) -> dict | None:
-        """Fetch current price and change vs previous close for any yfinance symbol."""
+    def _stats(sym: str, price_scale: float = 1.0) -> dict | None:
+        """
+        Fetch current price and change vs previous *completed* day's close.
+        price_scale: multiply price by this (e.g. 10 for gold per-10g).
+        Uses daily candles filtered to completed days to avoid today's partial candle
+        contaminating the prev_close calculation.
+        """
         price = get_latest_price(sym)
         df    = get_daily_candles(sym, period="5d")
         if price is None and df.empty:
             return None
         current = price if price is not None else float(df["close"].iloc[-1])
-        if df.empty:
-            return {"price": round(current, 2), "change": 0.0, "pct": 0.0}
-        prev_close = float(df["close"].iloc[-1])
-        change     = current - prev_close
-        pct        = (change / prev_close * 100) if prev_close else 0.0
-        return {"price": round(current, 2), "change": round(change, 2), "pct": round(pct, 2)}
 
-    sensex   = _stats("^BSESN")
-    goldbees = _stats("GOLDBEES.NS")
+        # Filter to completed days only — today's partial candle skews prev_close to ~0 change
+        prev_close = None
+        if not df.empty:
+            completed = df[pd.DatetimeIndex(df.index).date < today]
+            if not completed.empty:
+                prev_close = float(completed["close"].iloc[-1])
 
-    # 24k gold per 10g in INR = (COMEX USD/oz ÷ 31.1035) × 10 × USDINR
-    gold_usd  = get_latest_price("GC=F")
-    usdinr    = get_latest_price("USDINR=X")
-    gold_df   = get_daily_candles("GC=F", period="5d")
-    gold_inr  = None
-    if gold_usd and usdinr:
-        per_10g_inr = (gold_usd / TROY_OZ_TO_GRAMS) * 10 * usdinr
-        if not gold_df.empty:
-            prev_usd    = float(gold_df["close"].iloc[-1])
-            change_usd  = gold_usd - prev_usd
-            change_inr  = (change_usd / TROY_OZ_TO_GRAMS) * 10 * usdinr
-            pct         = (change_usd / prev_usd * 100) if prev_usd else 0.0
-        else:
-            change_inr, pct = 0.0, 0.0
-        gold_inr = {
-            "price":  round(per_10g_inr),
-            "change": round(change_inr),
+        current_scaled = current * price_scale
+        if prev_close is None:
+            return {"price": round(current_scaled, 2), "change": 0.0, "pct": 0.0}
+
+        change = (current - prev_close) * price_scale
+        pct    = ((current - prev_close) / prev_close * 100) if prev_close else 0.0
+        return {
+            "price":  round(current_scaled, 2),
+            "change": round(change, 2),
             "pct":    round(pct, 2),
         }
 
-    return {"sensex": sensex, "gold_24k_per_10g": gold_inr, "goldbees": goldbees}
+    sensex   = _stats("^BSESN")
+    gold_10g = _stats("GOLDIETF.NS", price_scale=10)  # 1 unit ≈ 1g → ×10 = per 10g
+    goldietf = _stats("GOLDIETF.NS")
+
+    return {"sensex": sensex, "gold_24k_per_10g": gold_10g, "goldietf": goldietf}
 
 
 @router.get("/risk-limits")

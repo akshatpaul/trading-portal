@@ -250,14 +250,14 @@ export default function TopBar({ onLogout }) {
           <TickerItem
             label="Gold 24k/10g"
             data={ticker.gold_24k_per_10g}
-            formatPrice={p => `₹${p?.toLocaleString('en-IN')}`}
+            formatPrice={p => `₹${p?.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`}
           />
-          {ticker.gold_24k_per_10g && ticker.goldbees && (
+          {ticker.gold_24k_per_10g && ticker.goldietf && (
             <span className="text-slate-700">|</span>
           )}
           <TickerItem
-            label="GOLDBEES"
-            data={ticker.goldbees}
+            label="GOLDIETF"
+            data={ticker.goldietf}
             formatPrice={p => `₹${p?.toFixed(2)}`}
           />
         </div>
