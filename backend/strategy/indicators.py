@@ -132,6 +132,32 @@ def add_adx(df: pd.DataFrame, period: int = 14) -> pd.DataFrame:
     return pd.concat([df, adx, plus_di, minus_di], axis=1)
 
 
+# ── RSI ───────────────────────────────────────
+
+def add_rsi(df: pd.DataFrame, period: int = 14, col: str = "close") -> pd.DataFrame:
+    """
+    Append RSI column: rsi_{period}
+
+    Uses Wilder's smoothed RS (RMA):
+        gain = max(close - prev_close, 0)
+        loss = max(prev_close - close, 0)
+        RS   = RMA(gain, period) / RMA(loss, period)
+        RSI  = 100 - (100 / (1 + RS))
+
+    Returns:
+        df with new column  rsi_{period}
+    """
+    delta    = df[col].diff()
+    gain     = delta.clip(lower=0)
+    loss     = (-delta).clip(lower=0)
+    alpha    = 1.0 / period
+    avg_gain = gain.ewm(alpha=alpha, adjust=False, min_periods=period).mean()
+    avg_loss = loss.ewm(alpha=alpha, adjust=False, min_periods=period).mean()
+    rs       = avg_gain / avg_loss.replace(0, float("nan"))
+    rsi      = (100 - (100 / (1 + rs))).rename(f"rsi_{period}")
+    return pd.concat([df, rsi], axis=1)
+
+
 # ── VWAP ──────────────────────────────────────
 
 def add_vwap(df: pd.DataFrame) -> pd.DataFrame:
@@ -190,6 +216,7 @@ def add_all_indicators(df: pd.DataFrame) -> pd.DataFrame:
         ema_9, ema_21,
         atr_14,
         adx_14, dmp_14, dmn_14,
+        rsi_14,
         vwap,
         vol_ratio
 
@@ -200,6 +227,7 @@ def add_all_indicators(df: pd.DataFrame) -> pd.DataFrame:
     df = add_ema(df, period=21)
     df = add_atr(df, period=14)
     df = add_adx(df, period=14)
+    df = add_rsi(df, period=14)
     df = add_vwap(df)
     df = add_volume_ratio(df, period=20)
     return df

@@ -363,6 +363,70 @@ async def switch_to_paper():
 
 
 # ─────────────────────────────────────────────
+# Strategy switching
+# ─────────────────────────────────────────────
+
+@router.get("/strategy")
+async def get_strategy():
+    """Return active strategy, valid strategies, and whether switching is locked today."""
+    from strategy.signals import VALID_STRATEGIES
+    from execution.paper_trader import get_open_paper_position
+
+    mode         = _current_mode()
+    active       = queries.get_setting("active_strategy", "ema_crossover") or "ema_crossover"
+    trades_today = queries.get_trades_count_today(mode)
+    open_pos     = get_open_paper_position()
+    locked       = trades_today > 0 or open_pos is not None
+    lock_reason  = (
+        "trade fired today" if trades_today > 0
+        else "position open" if open_pos
+        else None
+    )
+    return {
+        "active_strategy":  active,
+        "valid_strategies": VALID_STRATEGIES,
+        "locked":           locked,
+        "lock_reason":      lock_reason,
+    }
+
+
+@router.post("/strategy/{name}")
+async def set_strategy(name: str):
+    """
+    Switch active strategy.
+    Blocked if any trade has fired today OR a position is currently open.
+    Lock resets at midnight (trades query filters by today's date).
+    """
+    from strategy.signals import VALID_STRATEGIES
+    from execution.paper_trader import get_open_paper_position
+
+    if name not in VALID_STRATEGIES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unknown strategy '{name}'. Valid: {VALID_STRATEGIES}",
+        )
+
+    mode         = _current_mode()
+    trades_today = queries.get_trades_count_today(mode)
+    if trades_today > 0:
+        raise HTTPException(
+            status_code=409,
+            detail="Cannot switch strategy: a trade has already fired today. Lock resets at midnight.",
+        )
+
+    open_pos = get_open_paper_position()
+    if open_pos:
+        raise HTTPException(
+            status_code=409,
+            detail="Cannot switch strategy: a position is currently open.",
+        )
+
+    queries.set_setting("active_strategy", name)
+    log.info("Strategy switched to: %s", name)
+    return {"active_strategy": name, "message": f"Strategy set to {name}."}
+
+
+# ─────────────────────────────────────────────
 # Emergency stop
 # ─────────────────────────────────────────────
 

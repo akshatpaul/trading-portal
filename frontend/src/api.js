@@ -147,4 +147,16 @@ export async function runScreener() {
   return data
 }
 
+// ── Strategy ───────────────────────────────────────────────────
+
+export async function fetchStrategy() {
+  const { data } = await api.get('/api/strategy')
+  return data
+}
+
+export async function setStrategy(name) {
+  const { data } = await api.post(`/api/strategy/${name}`)
+  return data
+}
+
 export default api
