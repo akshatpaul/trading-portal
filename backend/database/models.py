@@ -52,7 +52,8 @@ CREATE TABLE IF NOT EXISTS positions (
     stop_loss       REAL NOT NULL,
     entry_time      TEXT NOT NULL,
     signal_id       INTEGER,
-    status          TEXT DEFAULT 'open' -- 'open' | 'closed'
+    status          TEXT DEFAULT 'open', -- 'open' | 'closed'
+    strategy        TEXT DEFAULT 'ema_crossover'
 );
 """
 

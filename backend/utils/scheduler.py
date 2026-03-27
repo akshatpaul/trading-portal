@@ -226,45 +226,56 @@ async def job_check_signals():
 
         from strategy.screener import get_todays_watchlist
         from data.historical import fetch_and_cache
-        from strategy.signals import check_entry_signal, check_exit_signal
+        from strategy.signals import check_exit_signal_for, check_entry_signal_for, STRATEGY_PRIORITY
         from strategy.risk_manager import can_place_trade, calculate_position_size
         from execution.paper_trader import (
-            get_open_paper_position, place_paper_order,
+            get_open_paper_positions, place_paper_order,
             close_paper_position, get_paper_capital, get_daily_paper_summary,
         )
         from api.websocket import manager
-
-        now = now_ist()
-        pos = get_open_paper_position()
-
         from database.queries import log_activity
-        if pos:
-            sym        = pos["symbol"]
-            entry      = float(pos["entry_price"])
-            target     = round(entry * 1.006, 2)
-            stop       = round(entry * 0.997, 2)
-            df         = fetch_and_cache(sym, period="1d")
-            if not df.empty:
-                ltp    = float(df["close"].iloc[-1])
-                unreal = round((ltp - entry) * pos["quantity"], 2)
-                sign   = "+" if unreal >= 0 else ""
-                reason = check_exit_signal(df, entry, now)
-                if reason:
-                    result = close_paper_position(pos["id"], ltp, reason)
-                    await manager.broadcast("trade_complete", result)
-                    log.info("Exit: %s [%s]", sym, reason)
-                else:
-                    name = sym.replace(".NS", "")
-                    log_activity(
-                        "signal",
-                        f"Holding {name} — LTP ₹{ltp:,.2f} | Target ₹{target:,.2f} | Stop ₹{stop:,.2f} | P&L {sign}₹{unreal:,.2f}",
-                        symbol=sym,
-                    )
-        else:
-            if not is_entry_window(now):
-                return
+
+        now          = now_ist()
+        open_positions = get_open_paper_positions()
+        open_symbols   = {p["symbol"] for p in open_positions}
+
+        # ── EXIT: check all open positions ───────────────────────
+        for pos in open_positions:
+            sym      = pos["symbol"]
+            entry    = float(pos["entry_price"])
+            target   = float(pos["target"])
+            stop     = float(pos["stop_loss"])
+            strategy = pos.get("strategy") or "ema_crossover"
+            df       = fetch_and_cache(sym, period="1d")
+            if df.empty:
+                continue
+            ltp    = float(df["close"].iloc[-1])
+            unreal = round((ltp - entry) * pos["quantity"], 2)
+            sign   = "+" if unreal >= 0 else ""
+            reason = check_exit_signal_for(df, entry, now, strategy)
+            if reason:
+                result = close_paper_position(pos["id"], ltp, reason)
+                open_symbols.discard(sym)
+                await manager.broadcast("trade_complete", result)
+                log.info("Exit: %s [%s]", sym, reason)
+            else:
+                name = sym.replace(".NS", "")
+                log_activity(
+                    "signal",
+                    f"Holding {name} [{strategy}] — LTP ₹{ltp:,.2f} | Target ₹{target:,.2f} | Stop ₹{stop:,.2f} | P&L {sign}₹{unreal:,.2f}",
+                    symbol=sym,
+                )
+
+        # ── ENTRY: check free watchlist stocks ───────────────────
+        if not is_entry_window(now):
+            return
+
+        capital = get_paper_capital()
+        free_stocks = [s for s in get_todays_watchlist() if s not in open_symbols]
+
+        for sym in free_stocks:
+            # Re-check risk gate before each trade (count updates in real time)
             summary = get_daily_paper_summary()
-            capital = get_paper_capital()
             allowed, block_reason = can_place_trade(
                 daily_loss   = abs(min(summary["final_pnl"], 0.0)),
                 trades_today = summary["trades_count"],
@@ -272,21 +283,30 @@ async def job_check_signals():
             )
             if not allowed:
                 log_activity("risk_block", f"Trade blocked: {block_reason}")
-                return
-            for sym in get_todays_watchlist():
-                df = fetch_and_cache(sym, period="1d")
-                if df.empty:
-                    continue
-                sig = check_entry_signal(df, sym)
+                break
+
+            df = fetch_and_cache(sym, period="1d")
+            if df.empty:
+                continue
+
+            sig              = None
+            matched_strategy = None
+            for strategy_name in STRATEGY_PRIORITY:
+                sig = check_entry_signal_for(df, sym, strategy_name)
                 if sig:
-                    qty   = calculate_position_size(capital, sig.price, sig.stop_loss)
-                    order = place_paper_order(sym, "BUY", qty, sig.price, sig.reason)
-                    await manager.broadcast("signal", sig.to_dict())
-                    await manager.broadcast("position_update", order)
-                    log.info("Entry: %s ×%d @ %.2f", sym, qty, sig.price)
-                    break  # one position at a time
-                else:
-                    log_activity("signal", f"No entry signal for {sym}", symbol=sym)
+                    matched_strategy = strategy_name
+                    break
+
+            if sig:
+                qty   = calculate_position_size(capital, sig.price, sig.stop_loss)
+                order = place_paper_order(sym, "BUY", qty, sig.price, sig.reason,
+                                          strategy=matched_strategy)
+                open_symbols.add(sym)
+                await manager.broadcast("signal", sig.to_dict())
+                await manager.broadcast("position_update", order)
+                log.info("Entry: %s ×%d @ %.2f [%s]", sym, qty, sig.price, matched_strategy)
+            else:
+                log_activity("signal", f"No entry signal for {sym}", symbol=sym)
 
     except Exception as exc:
         log.error("job_check_signals failed: %s", exc)

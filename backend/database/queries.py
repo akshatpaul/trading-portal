@@ -112,23 +112,43 @@ def insert_position(position: dict) -> int:
         INSERT INTO positions (
             symbol, mode, side, quantity,
             entry_price, target, stop_loss,
-            entry_time, signal_id, status
+            entry_time, signal_id, status, strategy
         ) VALUES (
             :symbol, :mode, :side, :quantity,
             :entry_price, :target, :stop_loss,
-            :entry_time, :signal_id, 'open'
+            :entry_time, :signal_id, 'open', :strategy
         )
     """
+    position.setdefault("strategy", "ema_crossover")
     with get_db() as conn:
         cur = conn.execute(sql, position)
         return cur.lastrowid
 
 
 def get_open_position() -> Optional[dict]:
-    """Return the single open position, or None."""
+    """Return the first open position (any mode), or None."""
     with get_db() as conn:
         row = conn.execute(
             "SELECT * FROM positions WHERE status = 'open' LIMIT 1"
+        ).fetchone()
+    return _row_to_dict(row)
+
+
+def get_open_positions(mode: str) -> list[dict]:
+    """Return all open positions for the given mode."""
+    with get_db() as conn:
+        rows = conn.execute(
+            "SELECT * FROM positions WHERE status = 'open' AND mode = ?",
+            (mode,),
+        ).fetchall()
+    return [_row_to_dict(r) for r in rows]
+
+
+def get_position_by_id(position_id: int) -> Optional[dict]:
+    """Return a position by its ID regardless of status."""
+    with get_db() as conn:
+        row = conn.execute(
+            "SELECT * FROM positions WHERE id = ?", (position_id,)
         ).fetchone()
     return _row_to_dict(row)
 

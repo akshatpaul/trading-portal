@@ -66,6 +66,15 @@ def init_db() -> None:
         for ddl in ALL_TABLES:
             conn.execute(ddl)
 
+    # Migrate existing DBs: add strategy column to positions if missing
+    with get_db() as conn:
+        try:
+            conn.execute(
+                "ALTER TABLE positions ADD COLUMN strategy TEXT DEFAULT 'ema_crossover'"
+            )
+        except Exception:
+            pass  # column already exists — safe to ignore
+
     # Seed default settings (only if missing)
     _seed_defaults()
 

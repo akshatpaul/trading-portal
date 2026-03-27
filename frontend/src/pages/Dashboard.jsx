@@ -1,13 +1,5 @@
-import { useQuery } from '@tanstack/react-query'
 import { useApp } from '../context/AppContext'
-import { fetchKiteLoginUrl, fetchStrategy } from '../api'
-
-const STRATEGY_LABELS = {
-  ema_crossover: 'EMA 9/21 Crossover',
-  relaxed_ema:   'Relaxed EMA',
-  rsi_bounce:    'RSI Bounce',
-  vwap_cross:    'VWAP Breakout',
-}
+import { fetchKiteLoginUrl } from '../api'
 import CapitalCard from '../components/cards/CapitalCard'
 import PnLCard from '../components/cards/PnLCard'
 import WinRateCard from '../components/cards/WinRateCard'
@@ -20,7 +12,7 @@ import LiveChart from '../components/chart/LiveChart'
 export default function Dashboard() {
   const {
     status,
-    position,
+    positions,
     trades,
     tradesLoading,
     chartSymbol,
@@ -28,13 +20,6 @@ export default function Dashboard() {
     setActiveTab,
     toast,
   } = useApp()
-
-  const { data: strategyData } = useQuery({
-    queryKey: ['strategy'],
-    queryFn: fetchStrategy,
-    refetchInterval: 30_000,
-  })
-  const activeStrategy = STRATEGY_LABELS[strategyData?.active_strategy] ?? strategyData?.active_strategy ?? '—'
 
   const mode       = status?.mode ?? 'paper'
   const capital    = status?.capital ?? 0
@@ -67,15 +52,12 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* Active strategy chip */}
+      {/* Strategy chip */}
       <div className="flex items-center gap-2 text-sm">
         <span className="text-text-muted">Strategy:</span>
         <span className="px-2.5 py-0.5 rounded-full bg-slate-700 text-text-primary font-medium text-xs">
-          {activeStrategy}
+          All Strategies (Parallel)
         </span>
-        {strategyData?.locked && (
-          <span className="text-xs text-amber-400">· locked today</span>
-        )}
       </div>
 
       {/* Kite token expired banner */}
@@ -106,12 +88,12 @@ export default function Dashboard() {
       {/* Chart + Sidebar */}
       <div className="grid grid-cols-1 xl:grid-cols-[1fr_320px] gap-5">
         {/* Chart — clicking will also be available on Chart tab */}
-        <LiveChart symbol={chartSymbol} position={position} mode={mode} />
+        <LiveChart symbol={chartSymbol} position={positions[0] ?? null} mode={mode} />
 
         {/* Right sidebar */}
         <div className="flex flex-col gap-4">
           <Watchlist onSelectSymbol={handleSelectSymbol} />
-          <PositionCard position={position} />
+          <PositionCard positions={positions} />
         </div>
       </div>
 

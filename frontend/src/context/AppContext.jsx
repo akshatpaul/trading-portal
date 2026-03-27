@@ -105,7 +105,7 @@ export function AppProvider({ children }) {
     status: statusQ.data,
     statusLoading: statusQ.isLoading,
     watchlist: watchlistItems,
-    position: positionsQ.data?.position ?? null,
+    positions: positionsQ.data?.positions ?? [],
     trades: tradesQ.data?.trades || [],
     tradesLoading: tradesQ.isLoading,
     // Refetch helpers

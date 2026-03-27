@@ -45,6 +45,7 @@ def place_paper_order(
     quantity: int,
     price: float,
     signal_reason: str,
+    strategy: str = "ema_crossover",
 ) -> dict:
     """
     Simulate an order fill with slippage.
@@ -67,6 +68,7 @@ def place_paper_order(
         "stop_loss":   stop_loss,
         "entry_time":  ts.isoformat(),
         "signal_id":   None,
+        "strategy":    strategy,
     })
 
     # Deduct capital (cash → shares)
@@ -118,8 +120,8 @@ def close_paper_position(
     Raises:
         ValueError: if position_id not found or already closed.
     """
-    pos = queries.get_open_position()
-    if pos is None or pos["id"] != position_id:
+    pos = queries.get_position_by_id(position_id)
+    if pos is None or pos["status"] != "open":
         raise ValueError(f"No open paper position with id={position_id}")
 
     symbol     = pos["symbol"]
@@ -195,11 +197,16 @@ def get_paper_capital() -> float:
 
 
 def get_open_paper_position() -> Optional[dict]:
-    """Return the currently open paper position, or None."""
+    """Return the first open paper position, or None."""
     pos = queries.get_open_position()
     if pos and pos.get("mode") == _MODE:
         return pos
     return None
+
+
+def get_open_paper_positions() -> list[dict]:
+    """Return all currently open paper positions."""
+    return queries.get_open_positions(_MODE)
 
 
 def get_daily_paper_summary(date: Optional[datetime] = None) -> dict:

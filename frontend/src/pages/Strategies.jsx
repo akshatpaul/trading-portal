@@ -1,5 +1,4 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { fetchStrategy, setStrategy } from '../api'
+// All strategies run in parallel — no switching needed
 
 // ── Static display metadata per strategy ──────────────────────
 const STRATEGY_METADATA = {
@@ -134,37 +133,21 @@ function Section({ title, rows }) {
   )
 }
 
-function StrategyCard({ id, isActive, isLocked, onActivate, activating }) {
+function StrategyCard({ id }) {
   const meta = STRATEGY_METADATA[id]
   if (!meta) return null
-
   const { name, tag, description, screener, entry, exit, schedule } = meta
 
   return (
-    <div className={`card ${isActive ? 'ring-1 ring-emerald-500/30' : ''}`}>
+    <div className="card ring-1 ring-emerald-500/20">
       <div className="flex items-start justify-between mb-4">
         <div>
           <h3 className="font-semibold text-text-primary text-base">{name}</h3>
           <span className="text-xs text-text-muted">{tag}</span>
         </div>
-
-        {isActive ? (
-          <span className="text-xs px-2.5 py-1 rounded-full bg-emerald-500/20 text-emerald-400 font-semibold border border-emerald-500/30">
-            Active
-          </span>
-        ) : isLocked ? (
-          <span className="text-xs px-2.5 py-1 rounded-full bg-slate-700 text-slate-500 font-medium">
-            Locked
-          </span>
-        ) : (
-          <button
-            onClick={() => onActivate(id)}
-            disabled={activating}
-            className="text-xs px-2.5 py-1 rounded-full bg-slate-700 hover:bg-slate-600 text-text-secondary hover:text-text-primary font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {activating ? 'Switching…' : 'Activate'}
-          </button>
-        )}
+        <span className="text-xs px-2.5 py-1 rounded-full bg-emerald-500/20 text-emerald-400 font-semibold border border-emerald-500/30">
+          Running
+        </span>
       </div>
 
       <p className="text-sm text-text-secondary mb-5">{description}</p>
@@ -186,62 +169,20 @@ function StrategyCard({ id, isActive, isLocked, onActivate, activating }) {
 // ── Page ──────────────────────────────────────
 
 export default function Strategies() {
-  const qc = useQueryClient()
-
-  const { data, isLoading } = useQuery({
-    queryKey: ['strategy'],
-    queryFn: fetchStrategy,
-    refetchInterval: 15_000,
-  })
-
-  const mutation = useMutation({
-    mutationFn: setStrategy,
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['strategy'] }),
-  })
-
-  const activeStrategy  = data?.active_strategy ?? 'ema_crossover'
-  const validStrategies = data?.valid_strategies ?? Object.keys(STRATEGY_METADATA)
-  const locked          = data?.locked ?? false
-  const lockReason      = data?.lock_reason ?? null
+  const strategies = Object.keys(STRATEGY_METADATA)
 
   return (
     <div className="space-y-6">
       <div>
         <h2 className="text-lg font-bold text-text-primary">Strategies</h2>
         <p className="text-sm text-text-muted mt-0.5">
-          {!isLoading && (
-            <>Active: <span className="text-text-primary font-medium">{STRATEGY_METADATA[activeStrategy]?.name ?? activeStrategy}</span> · </>
-          )}
-          Switch by activating a different one.
+          All strategies run in parallel. Each watchlist stock is claimed by the first strategy that fires a signal on it.
         </p>
       </div>
 
-      {locked && (
-        <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-300">
-          Strategy locked for today ({lockReason}) — resets at midnight.
-        </div>
-      )}
-
-      {isLoading ? (
-        <div className="space-y-4">
-          {[1, 2, 3, 4].map(i => (
-            <div key={i} className="card h-24 animate-pulse bg-slate-800/50" />
-          ))}
-        </div>
-      ) : (
-        <div className="space-y-4">
-          {validStrategies.map(id => (
-            <StrategyCard
-              key={id}
-              id={id}
-              isActive={id === activeStrategy}
-              isLocked={locked && id !== activeStrategy}
-              onActivate={(name) => mutation.mutate(name)}
-              activating={mutation.isPending && mutation.variables === id}
-            />
-          ))}
-        </div>
-      )}
+      <div className="space-y-4">
+        {strategies.map(id => <StrategyCard key={id} id={id} />)}
+      </div>
     </div>
   )
 }

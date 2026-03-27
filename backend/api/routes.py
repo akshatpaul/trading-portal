@@ -140,30 +140,20 @@ async def trigger_screener():
 @router.get("/positions")
 async def get_positions():
     """
-    Currently open position with live P&L estimate.
-    Returns position=None when flat.
+    All currently open positions with live P&L estimates.
+    Returns positions=[] when flat.
     """
-    from execution.paper_trader import get_open_paper_position
+    from execution.paper_trader import get_open_paper_positions
     from data.yfinance_client import get_latest_price
 
-    pos = get_open_paper_position()
-    if pos is None:
-        return {"position": None}
+    open_positions = get_open_paper_positions()
+    enriched = []
+    for pos in open_positions:
+        ltp = get_latest_price(pos["symbol"])
+        unrealised_pnl = round((ltp - float(pos["entry_price"])) * pos["quantity"], 2) if ltp else None
+        enriched.append({**pos, "ltp": ltp, "unrealised_pnl": unrealised_pnl})
 
-    symbol     = pos["symbol"]
-    entry_fill = float(pos["entry_price"])
-    qty        = pos["quantity"]
-
-    ltp = get_latest_price(symbol)
-    unrealised_pnl = round((ltp - entry_fill) * qty, 2) if ltp else None
-
-    return {
-        "position": {
-            **pos,
-            "ltp":             ltp,
-            "unrealised_pnl":  unrealised_pnl,
-        }
-    }
+    return {"positions": enriched}
 
 
 # ─────────────────────────────────────────────

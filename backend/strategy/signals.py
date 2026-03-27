@@ -447,6 +447,31 @@ _REGISTRY: dict[str, tuple] = {
 
 VALID_STRATEGIES = list(_REGISTRY.keys())
 
+# Fixed priority order for parallel execution: first match on a stock wins
+STRATEGY_PRIORITY: list[str] = [
+    "ema_crossover",
+    "relaxed_ema",
+    "rsi_bounce",
+    "vwap_cross",
+]
+
+
+def check_entry_signal_for(df: pd.DataFrame, symbol: str, strategy_name: str) -> Optional[Signal]:
+    """Check entry signal for a specific strategy (bypasses active_strategy setting)."""
+    entry_fn, _ = _REGISTRY.get(strategy_name, _REGISTRY[_DEFAULT_STRATEGY])
+    return entry_fn(df, symbol)
+
+
+def check_exit_signal_for(
+    df: pd.DataFrame,
+    entry_price: float,
+    open_since: datetime,
+    strategy_name: str,
+) -> Optional[str]:
+    """Check exit signal for a specific strategy (bypasses active_strategy setting)."""
+    _, exit_fn = _REGISTRY.get(strategy_name, _REGISTRY[_DEFAULT_STRATEGY])
+    return exit_fn(df, entry_price, open_since)
+
 
 def _get_active_strategy() -> str:
     from database.queries import get_setting
