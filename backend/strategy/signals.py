@@ -34,8 +34,8 @@ _EMA_FAST       = 9
 _EMA_SLOW       = 21
 _VOL_RATIO_MIN  = 1.5
 _ADX_MIN        = 20.0
-_TARGET_PCT     = 0.006    # +0.6%
-_STOP_PCT       = 0.003    # -0.3%
+_TARGET_PCT     = 0.010    # +1.0%
+_STOP_PCT       = 0.005    # -0.5%
 _ENTRY_OPEN     = (9,  30)  # 09:30 IST
 _ENTRY_CLOSE    = (14, 30)  # 14:30 IST
 _ENTRY_CLOSE_RELAXED = (15, 0)  # 15:00 IST — relaxed_ema only
@@ -99,8 +99,8 @@ def calculate_targets(entry_price: float) -> tuple[float, float]:
 
     Returns:
         (target_price, stop_loss_price)
-        target    = entry * 1.006  (+0.6%)
-        stop_loss = entry * 0.997  (-0.3%)
+        target    = entry * 1.010  (+1.0%)
+        stop_loss = entry * 0.995  (-0.5%)
     """
     target    = round(entry_price * (1 + _TARGET_PCT), 2)
     stop_loss = round(entry_price * (1 - _STOP_PCT),   2)
