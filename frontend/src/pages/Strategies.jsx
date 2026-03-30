@@ -23,8 +23,8 @@ const STRATEGY_METADATA = {
       { label: 'Direction',   value: 'Long (BUY) only' },
     ],
     exit: [
-      { label: 'Target',      value: '+0.6% from entry',   color: 'text-emerald-400' },
-      { label: 'Stop loss',   value: '−0.3% from entry',   color: 'text-red-400' },
+      { label: 'Target',      value: '+1.0% from entry',   color: 'text-emerald-400' },
+      { label: 'Stop loss',   value: '−0.5% from entry',   color: 'text-red-400' },
       { label: 'Force close', value: '3:10 PM IST (EOD)',  color: 'text-amber-400' },
     ],
     schedule: [
@@ -50,8 +50,8 @@ const STRATEGY_METADATA = {
       { label: 'Direction',   value: 'Long (BUY) only' },
     ],
     exit: [
-      { label: 'Target',      value: '+0.6% from entry',   color: 'text-emerald-400' },
-      { label: 'Stop loss',   value: '−0.3% from entry',   color: 'text-red-400' },
+      { label: 'Target',      value: '+1.0% from entry',   color: 'text-emerald-400' },
+      { label: 'Stop loss',   value: '−0.5% from entry',   color: 'text-red-400' },
       { label: 'Force close', value: '3:10 PM IST (EOD)',  color: 'text-amber-400' },
     ],
     schedule: [
@@ -76,8 +76,8 @@ const STRATEGY_METADATA = {
     ],
     exit: [
       { label: 'RSI exit',    value: 'RSI > 65 (overbought)',  color: 'text-sky-400' },
-      { label: 'Target',      value: '+0.6% from entry',        color: 'text-emerald-400' },
-      { label: 'Stop loss',   value: '−0.3% from entry',        color: 'text-red-400' },
+      { label: 'Target',      value: '+1.0% from entry',        color: 'text-emerald-400' },
+      { label: 'Stop loss',   value: '−0.5% from entry',        color: 'text-red-400' },
       { label: 'Force close', value: '3:10 PM IST (EOD)',        color: 'text-amber-400' },
     ],
     schedule: [
@@ -102,8 +102,8 @@ const STRATEGY_METADATA = {
     ],
     exit: [
       { label: 'VWAP exit',   value: 'Price drops below VWAP',  color: 'text-sky-400' },
-      { label: 'Target',      value: '+0.6% from entry',          color: 'text-emerald-400' },
-      { label: 'Stop loss',   value: '−0.3% from entry',          color: 'text-red-400' },
+      { label: 'Target',      value: '+1.0% from entry',          color: 'text-emerald-400' },
+      { label: 'Stop loss',   value: '−0.5% from entry',          color: 'text-red-400' },
       { label: 'Force close', value: '3:10 PM IST (EOD)',          color: 'text-amber-400' },
     ],
     schedule: [
