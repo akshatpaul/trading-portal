@@ -14,7 +14,7 @@ ExecStart=/opt/trading-portal/venv/bin/uvicorn main:app \
   --port 8000 \
   --workers 1 \
   --log-level info
-Restart=always
+Restart=on-failure
 RestartSec=5
 StandardOutput=journal
 StandardError=journal
