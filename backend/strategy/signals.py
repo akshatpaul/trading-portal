@@ -9,6 +9,7 @@ Strategies:
   relaxed_ema    — EMA 9/21 crossover only, wider time window (9:30–15:00)
   rsi_bounce     — RSI(14) crosses below 35; exit when RSI > 65 or target/SL
   vwap_cross     — Close crosses above VWAP; exit when price falls below VWAP
+  orb            — Opening Range Breakout: break above high of 9:15–9:29 range
 
 Public API (unchanged):
   check_entry_signal(df, symbol)             → Optional[Signal]
@@ -433,6 +434,90 @@ def _exit_vwap_cross(
 
 
 # ─────────────────────────────────────────────
+# Strategy: orb (Opening Range Breakout)
+# ─────────────────────────────────────────────
+
+_ORB_VOL_MIN = 1.2  # lighter volume filter than ema_crossover
+
+
+def _entry_orb(df: pd.DataFrame, symbol: str) -> Optional[Signal]:
+    """Break above high of opening range (9:15–9:29 IST). Window 9:30–14:30."""
+    if df.empty or len(df) < 5:
+        return None
+
+    ts = df.index[-1]
+    if not is_within_trading_hours(ts.to_pydatetime()):
+        return None
+
+    # Opening range = candles whose timestamp is between 9:15 and 9:29
+    range_candles = df[(df.index.hour == 9) & (df.index.minute < 30)]
+    if range_candles.empty:
+        return None
+
+    range_high = float(range_candles["high"].max())
+
+    prev_close = float(df["close"].iloc[-2])
+    curr_close = float(df["close"].iloc[-1])
+
+    if math.isnan(prev_close) or math.isnan(curr_close):
+        return None
+
+    # Fresh breakout: previous close was at or below range high, current is above
+    if not (prev_close <= range_high < curr_close):
+        return None
+
+    # Volume confirmation
+    df = add_volume_ratio(df, period=20)
+    vol_ratio = float(df["vol_ratio"].iloc[-1])
+    if math.isnan(vol_ratio) or vol_ratio < _ORB_VOL_MIN:
+        return None
+
+    price = round(curr_close, 2)
+    target, stop_loss = calculate_targets(price)
+    reason = f"ORB BUY | breakout above range high ₹{range_high:.2f} | vol_ratio={vol_ratio:.2f}"
+
+    return Signal(
+        symbol=symbol, side="BUY", price=price,
+        target=target, stop_loss=stop_loss,
+        timestamp=ts.to_pydatetime(), reason=reason,
+        ema_9=float("nan"), ema_21=float("nan"),
+        adx=float("nan"), vol_ratio=round(vol_ratio, 4),
+    )
+
+
+def _exit_orb(
+    df: pd.DataFrame,
+    entry_price: float,
+    open_since: datetime,
+) -> Optional[str]:
+    """Exit: force close → price targets → price falls back below opening range high."""
+    if df.empty:
+        return None
+
+    ts    = df.index[-1]
+    price = float(df["close"].iloc[-1])
+    t     = (ts.hour, ts.minute)
+
+    if t >= _FORCE_CLOSE:
+        return "FORCE_CLOSE"
+
+    target, stop_loss = calculate_targets(entry_price)
+    if price >= target:
+        return "TARGET"
+    if price <= stop_loss:
+        return "STOP_LOSS"
+
+    # Range invalidation: price falls back below opening range high
+    range_candles = df[(df.index.hour == 9) & (df.index.minute < 30)]
+    if not range_candles.empty:
+        range_high = float(range_candles["high"].max())
+        if price < range_high:
+            return "RANGE_EXIT"
+
+    return None
+
+
+# ─────────────────────────────────────────────
 # Strategy registry + dispatcher helpers
 # ─────────────────────────────────────────────
 
@@ -443,6 +528,7 @@ _REGISTRY: dict[str, tuple] = {
     "relaxed_ema":   (_entry_relaxed_ema,   _exit_price_targets),
     "rsi_bounce":    (_entry_rsi_bounce,     _exit_rsi_bounce),
     "vwap_cross":    (_entry_vwap_cross,     _exit_vwap_cross),
+    "orb":           (_entry_orb,            _exit_orb),
 }
 
 VALID_STRATEGIES = list(_REGISTRY.keys())
@@ -453,7 +539,15 @@ STRATEGY_PRIORITY: list[str] = [
     "relaxed_ema",
     "rsi_bounce",
     "vwap_cross",
+    "orb",
 ]
+
+
+def get_disabled_strategies() -> list[str]:
+    """Return strategy names currently disabled (stored in app_settings)."""
+    from database.queries import get_setting
+    val = get_setting("disabled_strategies", "") or ""
+    return [s.strip() for s in val.split(",") if s.strip()]
 
 
 def check_entry_signal_for(df: pd.DataFrame, symbol: str, strategy_name: str) -> Optional[Signal]:

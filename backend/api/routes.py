@@ -372,11 +372,13 @@ async def get_strategy():
         else "position open" if open_pos
         else None
     )
+    from strategy.signals import get_disabled_strategies
     return {
-        "active_strategy":  active,
-        "valid_strategies": VALID_STRATEGIES,
-        "locked":           locked,
-        "lock_reason":      lock_reason,
+        "active_strategy":    active,
+        "valid_strategies":   VALID_STRATEGIES,
+        "disabled_strategies": get_disabled_strategies(),
+        "locked":             locked,
+        "lock_reason":        lock_reason,
     }
 
 
@@ -414,6 +416,27 @@ async def set_strategy(name: str):
     queries.set_setting("active_strategy", name)
     log.info("Strategy switched to: %s", name)
     return {"active_strategy": name, "message": f"Strategy set to {name}."}
+
+
+@router.post("/strategy/{name}/toggle")
+async def toggle_strategy(name: str):
+    """Enable or disable a strategy in parallel execution."""
+    from strategy.signals import VALID_STRATEGIES, get_disabled_strategies
+
+    if name not in VALID_STRATEGIES:
+        raise HTTPException(status_code=400, detail=f"Unknown strategy '{name}'.")
+
+    disabled = get_disabled_strategies()
+    if name in disabled:
+        disabled.remove(name)
+        action = "enabled"
+    else:
+        disabled.append(name)
+        action = "disabled"
+
+    queries.set_setting("disabled_strategies", ",".join(disabled))
+    log.info("Strategy %s: %s", name, action)
+    return {"strategy": name, "action": action, "disabled_strategies": disabled}
 
 
 # ─────────────────────────────────────────────

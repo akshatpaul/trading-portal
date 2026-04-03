@@ -93,6 +93,12 @@ async def on_startup():
     init_db()
     log.info("Database initialised")
 
+    # Seed disabled_strategies default: vwap_cross paused on first run
+    from database import queries as _sq
+    if _sq.get_setting("disabled_strategies") is None:
+        _sq.set_setting("disabled_strategies", "vwap_cross")
+        log.info("Seeded disabled_strategies=vwap_cross")
+
     scheduler_start()
     log.info("Scheduler started")
 

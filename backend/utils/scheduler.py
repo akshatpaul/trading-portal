@@ -226,7 +226,9 @@ async def job_check_signals():
 
         from strategy.screener import get_todays_watchlist
         from data.historical import fetch_and_cache
-        from strategy.signals import check_exit_signal_for, check_entry_signal_for, STRATEGY_PRIORITY
+        from strategy.signals import check_exit_signal_for, check_entry_signal_for, STRATEGY_PRIORITY, get_disabled_strategies
+        disabled         = get_disabled_strategies()
+        active_priority  = [s for s in STRATEGY_PRIORITY if s not in disabled]
         from strategy.risk_manager import can_place_trade, calculate_position_size
         from execution.paper_trader import (
             get_open_paper_positions, place_paper_order,
@@ -291,7 +293,7 @@ async def job_check_signals():
 
             sig              = None
             matched_strategy = None
-            for strategy_name in STRATEGY_PRIORITY:
+            for strategy_name in active_priority:
                 sig = check_entry_signal_for(df, sym, strategy_name)
                 if sig:
                     matched_strategy = strategy_name

@@ -1,4 +1,8 @@
-// All strategies run in parallel — no switching needed
+// All strategies run in parallel — disabled ones are skipped each cycle
+
+import { useState } from 'react'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { fetchStrategy, toggleStrategy } from '../api'
 
 // ── Static display metadata per strategy ──────────────────────
 const STRATEGY_METADATA = {
@@ -23,9 +27,9 @@ const STRATEGY_METADATA = {
       { label: 'Direction',   value: 'Long (BUY) only' },
     ],
     exit: [
-      { label: 'Target',      value: '+1.0% from entry',   color: 'text-emerald-400' },
-      { label: 'Stop loss',   value: '−0.5% from entry',   color: 'text-red-400' },
-      { label: 'Force close', value: '3:10 PM IST (EOD)',  color: 'text-amber-400' },
+      { label: 'Target',      value: '+1.0% from entry',  color: 'text-emerald-400' },
+      { label: 'Stop loss',   value: '−0.5% from entry',  color: 'text-red-400' },
+      { label: 'Force close', value: '3:10 PM IST (EOD)', color: 'text-amber-400' },
     ],
     schedule: [
       { label: 'Screener runs', value: '8:45 AM IST (pre-market)' },
@@ -50,9 +54,9 @@ const STRATEGY_METADATA = {
       { label: 'Direction',   value: 'Long (BUY) only' },
     ],
     exit: [
-      { label: 'Target',      value: '+1.0% from entry',   color: 'text-emerald-400' },
-      { label: 'Stop loss',   value: '−0.5% from entry',   color: 'text-red-400' },
-      { label: 'Force close', value: '3:10 PM IST (EOD)',  color: 'text-amber-400' },
+      { label: 'Target',      value: '+1.0% from entry',  color: 'text-emerald-400' },
+      { label: 'Stop loss',   value: '−0.5% from entry',  color: 'text-red-400' },
+      { label: 'Force close', value: '3:10 PM IST (EOD)', color: 'text-amber-400' },
     ],
     schedule: [
       { label: 'Screener runs', value: '8:45 AM IST (pre-market)' },
@@ -64,7 +68,7 @@ const STRATEGY_METADATA = {
     name: 'RSI Oversold Bounce',
     tag: 'Mean Reversion · Intraday',
     description:
-      'Buys when RSI(14) freshly crosses below 35 (oversold). Exits when RSI recovers above 65, or when fixed target/stop is hit. Good for testing exits and stop-loss logic.',
+      'Buys when RSI(14) freshly crosses below 35 (oversold). Exits when RSI recovers above 65, or when fixed target/stop is hit.',
     screener: [
       { label: 'Universe',      value: 'Nifty 50 (same watchlist)' },
       { label: 'Stocks picked', value: 'Top 3 by composite score' },
@@ -76,9 +80,9 @@ const STRATEGY_METADATA = {
     ],
     exit: [
       { label: 'RSI exit',    value: 'RSI > 65 (overbought)',  color: 'text-sky-400' },
-      { label: 'Target',      value: '+1.0% from entry',        color: 'text-emerald-400' },
-      { label: 'Stop loss',   value: '−0.5% from entry',        color: 'text-red-400' },
-      { label: 'Force close', value: '3:10 PM IST (EOD)',        color: 'text-amber-400' },
+      { label: 'Target',      value: '+1.0% from entry',       color: 'text-emerald-400' },
+      { label: 'Stop loss',   value: '−0.5% from entry',       color: 'text-red-400' },
+      { label: 'Force close', value: '3:10 PM IST (EOD)',      color: 'text-amber-400' },
     ],
     schedule: [
       { label: 'Screener runs', value: '8:45 AM IST (pre-market)' },
@@ -90,7 +94,7 @@ const STRATEGY_METADATA = {
     name: 'VWAP Breakout',
     tag: 'Momentum · Intraday',
     description:
-      'Enters when price freshly crosses above intraday VWAP. Exits the moment price falls back below VWAP. Good for testing real-time chart signals and watchlist.',
+      'Enters when price freshly crosses above intraday VWAP. Exits the moment price falls back below VWAP.',
     screener: [
       { label: 'Universe',      value: 'Nifty 50 (same watchlist)' },
       { label: 'Stocks picked', value: 'Top 3 by composite score' },
@@ -102,9 +106,36 @@ const STRATEGY_METADATA = {
     ],
     exit: [
       { label: 'VWAP exit',   value: 'Price drops below VWAP',  color: 'text-sky-400' },
-      { label: 'Target',      value: '+1.0% from entry',          color: 'text-emerald-400' },
-      { label: 'Stop loss',   value: '−0.5% from entry',          color: 'text-red-400' },
-      { label: 'Force close', value: '3:10 PM IST (EOD)',          color: 'text-amber-400' },
+      { label: 'Target',      value: '+1.0% from entry',         color: 'text-emerald-400' },
+      { label: 'Stop loss',   value: '−0.5% from entry',         color: 'text-red-400' },
+      { label: 'Force close', value: '3:10 PM IST (EOD)',         color: 'text-amber-400' },
+    ],
+    schedule: [
+      { label: 'Screener runs', value: '8:45 AM IST (pre-market)' },
+      { label: 'Signal check',  value: 'Every 5-minute candle close' },
+      { label: 'Max positions', value: '1 at a time' },
+    ],
+  },
+  orb: {
+    name: 'Opening Range Breakout',
+    tag: 'Breakout · Intraday',
+    description:
+      'Defines the opening range as the high/low of the first 15 minutes (9:15–9:29 AM). Enters when price breaks above the range high with volume confirmation. Exits if price falls back below the range high.',
+    screener: [
+      { label: 'Universe',      value: 'Nifty 50 (same watchlist)' },
+      { label: 'Stocks picked', value: 'Top 3 by composite score' },
+    ],
+    entry: [
+      { label: 'Signal',      value: 'Close breaks above 9:15–9:29 range high' },
+      { label: 'Volume',      value: 'Current vol > 1.2× 20-bar avg' },
+      { label: 'Time window', value: '9:30 AM – 2:30 PM IST' },
+      { label: 'Direction',   value: 'Long (BUY) only' },
+    ],
+    exit: [
+      { label: 'Range exit',  value: 'Price falls below range high', color: 'text-sky-400' },
+      { label: 'Target',      value: '+1.0% from entry',             color: 'text-emerald-400' },
+      { label: 'Stop loss',   value: '−0.5% from entry',             color: 'text-red-400' },
+      { label: 'Force close', value: '3:10 PM IST (EOD)',            color: 'text-amber-400' },
     ],
     schedule: [
       { label: 'Screener runs', value: '8:45 AM IST (pre-market)' },
@@ -133,21 +164,39 @@ function Section({ title, rows }) {
   )
 }
 
-function StrategyCard({ id }) {
+function StrategyCard({ id, disabled, onToggle, toggling }) {
   const meta = STRATEGY_METADATA[id]
   if (!meta) return null
   const { name, tag, description, screener, entry, exit, schedule } = meta
+  const isPaused = disabled
 
   return (
-    <div className="card ring-1 ring-emerald-500/20">
+    <div className={`card ring-1 ${isPaused ? 'ring-zinc-700/40 opacity-60' : 'ring-emerald-500/20'}`}>
       <div className="flex items-start justify-between mb-4">
         <div>
           <h3 className="font-semibold text-text-primary text-base">{name}</h3>
           <span className="text-xs text-text-muted">{tag}</span>
         </div>
-        <span className="text-xs px-2.5 py-1 rounded-full bg-emerald-500/20 text-emerald-400 font-semibold border border-emerald-500/30">
-          Running
-        </span>
+        <div className="flex items-center gap-2">
+          <span className={`text-xs px-2.5 py-1 rounded-full font-semibold border ${
+            isPaused
+              ? 'bg-zinc-700/40 text-zinc-400 border-zinc-600/40'
+              : 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
+          }`}>
+            {isPaused ? 'Paused' : 'Running'}
+          </span>
+          <button
+            onClick={() => onToggle(id)}
+            disabled={toggling}
+            className={`text-xs px-2.5 py-1 rounded-full font-semibold border transition-colors ${
+              isPaused
+                ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/20'
+                : 'bg-red-500/10 text-red-400 border-red-500/30 hover:bg-red-500/20'
+            } disabled:opacity-40`}
+          >
+            {toggling ? '…' : isPaused ? 'Enable' : 'Pause'}
+          </button>
+        </div>
       </div>
 
       <p className="text-sm text-text-secondary mb-5">{description}</p>
@@ -169,6 +218,26 @@ function StrategyCard({ id }) {
 // ── Page ──────────────────────────────────────
 
 export default function Strategies() {
+  const queryClient = useQueryClient()
+  const [togglingId, setTogglingId] = useState(null)
+
+  const { data: strategyData } = useQuery({
+    queryKey: ['strategy'],
+    queryFn: fetchStrategy,
+    staleTime: 30_000,
+  })
+
+  const disabledSet = new Set(strategyData?.disabled_strategies ?? [])
+
+  const mutation = useMutation({
+    mutationFn: toggleStrategy,
+    onMutate: (name) => setTogglingId(name),
+    onSettled: () => {
+      setTogglingId(null)
+      queryClient.invalidateQueries({ queryKey: ['strategy'] })
+    },
+  })
+
   const strategies = Object.keys(STRATEGY_METADATA)
 
   return (
@@ -176,12 +245,20 @@ export default function Strategies() {
       <div>
         <h2 className="text-lg font-bold text-text-primary">Strategies</h2>
         <p className="text-sm text-text-muted mt-0.5">
-          All strategies run in parallel. Each watchlist stock is claimed by the first strategy that fires a signal on it.
+          All enabled strategies run in parallel. Each watchlist stock is claimed by the first strategy that fires a signal on it.
         </p>
       </div>
 
       <div className="space-y-4">
-        {strategies.map(id => <StrategyCard key={id} id={id} />)}
+        {strategies.map(id => (
+          <StrategyCard
+            key={id}
+            id={id}
+            disabled={disabledSet.has(id)}
+            onToggle={(name) => mutation.mutate(name)}
+            toggling={togglingId === id}
+          />
+        ))}
       </div>
     </div>
   )

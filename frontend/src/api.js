@@ -159,4 +159,9 @@ export async function setStrategy(name) {
   return data
 }
 
+export async function toggleStrategy(name) {
+  const { data } = await api.post(`/api/strategy/${name}/toggle`)
+  return data
+}
+
 export default api
