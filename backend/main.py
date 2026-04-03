@@ -61,9 +61,32 @@ async def websocket_route(ws: WebSocket):
 
 # ── Lifecycle ─────────────────────────────────
 
+def _stop_ec2() -> None:
+    """Shut down the OS — on EBS-backed EC2 this stops the instance."""
+    import subprocess
+    subprocess.Popen(["sudo", "shutdown", "-h", "+1"])
+    log.info("OS shutdown scheduled in 1 minute")
+
+
 @app.on_event("startup")
 async def on_startup():
     """Initialise DB, start scheduler, send online alert."""
+    from utils.helpers import is_trading_day, today_ist, now_ist
+
+    # ── Holiday guard — shut down EC2 if today is not a trading day ──
+    if not is_trading_day():
+        date_str = today_ist().strftime("%a %d %b %Y")
+        log.info("Market holiday today (%s) — shutting down EC2", date_str)
+        try:
+            from alerts.telegram import send_holiday_shutdown
+            await send_holiday_shutdown(date_str)
+        except Exception as exc:
+            log.debug("Holiday alert skipped: %s", exc)
+        _stop_ec2()
+        import os, signal
+        os.kill(os.getpid(), signal.SIGTERM)
+        return
+
     from database.db import init_db
     from utils.scheduler import start as scheduler_start
 
@@ -74,7 +97,6 @@ async def on_startup():
     log.info("Scheduler started")
 
     # If the screener was missed (server started after 8:45 AM), run it now
-    from utils.helpers import today_ist, now_ist, is_trading_day
     from datetime import time as _time
     _now = now_ist()
     if is_trading_day(_now.date()) and _now.time() >= _time(8, 45):

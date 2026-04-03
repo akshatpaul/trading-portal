@@ -74,6 +74,13 @@ async def send_system_offline() -> None:
     await send_message("⭕ <b>Trading Portal offline</b>")
 
 
+async def send_holiday_shutdown(date_str: str) -> None:
+    await send_message(
+        f"🏖️ <b>Market holiday — {date_str}</b>\n"
+        f"EC2 shutting down. See you on the next trading day."
+    )
+
+
 async def send_error(description: str) -> None:
     await send_message(f"🔴 <b>Error:</b> {description}")
 
