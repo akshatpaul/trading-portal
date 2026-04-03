@@ -73,19 +73,19 @@ async def on_startup():
     """Initialise DB, start scheduler, send online alert."""
     from utils.helpers import is_trading_day, today_ist, now_ist
 
-    # ── Holiday guard — disabled temporarily for maintenance ──
-    # if not is_trading_day():
-    #     date_str = today_ist().strftime("%a %d %b %Y")
-    #     log.info("Market holiday today (%s) — shutting down EC2", date_str)
-    #     try:
-    #         from alerts.telegram import send_holiday_shutdown
-    #         await send_holiday_shutdown(date_str)
-    #     except Exception as exc:
-    #         log.debug("Holiday alert skipped: %s", exc)
-    #     _stop_ec2()
-    #     import os, signal
-    #     os.kill(os.getpid(), signal.SIGTERM)
-    #     return
+    # ── Holiday guard — shut down EC2 if today is not a trading day ──
+    if not is_trading_day():
+        date_str = today_ist().strftime("%a %d %b %Y")
+        log.info("Market holiday today (%s) — shutting down EC2", date_str)
+        try:
+            from alerts.telegram import send_holiday_shutdown
+            await send_holiday_shutdown(date_str)
+        except Exception as exc:
+            log.debug("Holiday alert skipped: %s", exc)
+        _stop_ec2()
+        import os, signal
+        os.kill(os.getpid(), signal.SIGTERM)
+        return
 
     from database.db import init_db
     from utils.scheduler import start as scheduler_start
