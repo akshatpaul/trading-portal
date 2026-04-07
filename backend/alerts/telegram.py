@@ -62,8 +62,10 @@ async def send_message(text: str) -> bool:
 # ─────────────────────────────────────────────
 
 async def send_system_online() -> None:
+    from database.queries import get_setting
     mode    = settings.app_mode.upper()
-    capital = settings.starting_capital
+    cap_val = get_setting("paper_capital", "40000")
+    capital = float(cap_val)
     await send_message(
         f"🟢 <b>Trading Portal online</b>\n"
         f"Mode: <b>{mode}</b> | Capital: <b>₹{capital:,.0f}</b>"
