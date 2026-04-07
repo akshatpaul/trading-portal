@@ -23,6 +23,9 @@ rsync -avz --progress \
   --exclude '*.pyc' \
   --exclude 'frontend/.vite' \
   --exclude '.env' \
+  --exclude '*.db' \
+  --exclude '*.db-wal' \
+  --exclude '*.db-shm' \
   -e "ssh -i $PEM_KEY -o StrictHostKeyChecking=no" \
   "$ROOT/" "$REMOTE_USER@$EC2_IP:$REMOTE_DIR/"
 
