@@ -30,8 +30,10 @@ from utils.helpers import now_ist
 log = logging.getLogger(__name__)
 
 SLIPPAGE_PCT     = 0.0005   # 0.05% on entry only
-_DEFAULT_CAPITAL = 10_000.0
-_CAPITAL_KEY     = "paper_capital"
+_DEFAULT_CAPITAL = 40_000.0   # Starting paper capital
+_CAPITAL_FLOOR   = 10_000.0   # Auto-reset threshold — refills to _DEFAULT_CAPITAL when hit
+_CAPITAL_KEY          = "paper_capital"
+_CAPITAL_RESET_KEY    = "paper_capital_last_reset"
 _MODE            = "paper"
 
 
@@ -166,6 +168,18 @@ def close_paper_position(
 
     # Return capital (shares → cash, costs deducted)
     capital = get_paper_capital() + exit_price * quantity - costs.total_cost
+
+    # Auto-reset: if capital fell below the floor, top it back up to starting capital
+    if capital < _CAPITAL_FLOOR:
+        log.warning(
+            "Paper capital ₹%.2f fell below floor ₹%.2f — resetting to ₹%.2f",
+            capital, _CAPITAL_FLOOR, _DEFAULT_CAPITAL,
+        )
+        capital = _DEFAULT_CAPITAL
+        queries.set_setting(_CAPITAL_RESET_KEY, ts.isoformat())
+        from database.queries import log_activity as _la
+        _la("system", f"Capital fell below ₹{_CAPITAL_FLOOR:,.0f} — reset to ₹{_DEFAULT_CAPITAL:,.0f}")
+
     queries.set_setting(_CAPITAL_KEY, str(round(capital, 2)))
 
     log.info(
@@ -194,6 +208,42 @@ def get_paper_capital() -> float:
     """Return current virtual capital balance (cash only, excludes open positions)."""
     val = queries.get_setting(_CAPITAL_KEY, str(_DEFAULT_CAPITAL))
     return float(val)
+
+
+def get_capital_stats() -> dict:
+    """
+    Return capital metadata for the dashboard:
+      - current capital
+      - starting capital & floor
+      - total return vs. starting capital
+      - monthly P&L (current calendar month)
+      - last trade time
+      - when capital was last auto-reset (None if never)
+    """
+    capital = get_paper_capital()
+    last_reset = queries.get_setting(_CAPITAL_RESET_KEY)
+
+    # Last closed trade time
+    recent = queries.get_trades(limit=1, mode=_MODE)
+    last_trade_time = recent[0]["exit_time"] if recent else None
+
+    # Monthly P&L
+    monthly = queries.get_monthly_pnl(_MODE)
+
+    total_return = round(capital - _DEFAULT_CAPITAL, 2)
+    total_return_pct = round((total_return / _DEFAULT_CAPITAL) * 100, 2) if _DEFAULT_CAPITAL else 0.0
+
+    return {
+        "capital":           round(capital, 2),
+        "starting_capital":  _DEFAULT_CAPITAL,
+        "capital_floor":     _CAPITAL_FLOOR,
+        "total_return":      total_return,
+        "total_return_pct":  total_return_pct,
+        "monthly_pnl":       round(monthly.get("final_pnl", 0.0), 2),
+        "monthly_trades":    monthly.get("trades_count", 0),
+        "last_trade_time":   last_trade_time,
+        "capital_last_reset": last_reset,
+    }
 
 
 def get_open_paper_position() -> Optional[dict]:

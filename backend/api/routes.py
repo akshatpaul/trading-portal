@@ -191,6 +191,16 @@ async def get_daily_summary():
     return get_daily_paper_summary()
 
 
+@router.get("/capital-stats")
+async def get_capital_stats():
+    """
+    Capital metadata: starting capital, floor, total return, monthly P&L,
+    last trade time, and when capital was last auto-reset.
+    """
+    from execution.paper_trader import get_capital_stats
+    return get_capital_stats()
+
+
 # ─────────────────────────────────────────────
 # Candles
 # ─────────────────────────────────────────────

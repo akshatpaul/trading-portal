@@ -393,6 +393,32 @@ def purge_old_activity(days: int = 90) -> int:
         return cur.rowcount
 
 
+# ── Monthly P&L ───────────────────────────────
+
+def get_monthly_pnl(mode: str = "paper") -> dict:
+    """Return P&L aggregates for the current calendar month."""
+    from datetime import date as _date
+    today = _date.today()
+    month_start = f"{today.year}-{today.month:02d}-01"
+    with get_db() as conn:
+        row = conn.execute(
+            """
+            SELECT
+                COUNT(*)                        AS trades_count,
+                COALESCE(SUM(gross_pnl), 0)     AS gross_pnl,
+                COALESCE(SUM(total_cost), 0)    AS total_cost,
+                COALESCE(SUM(net_pnl),   0)     AS net_pnl,
+                COALESCE(SUM(tax_estimate), 0)  AS tax_estimate,
+                COALESCE(SUM(final_pnl), 0)     AS final_pnl,
+                MAX(exit_time)                  AS last_trade_time
+            FROM trades
+            WHERE mode = ? AND date(exit_time) >= ?
+            """,
+            (mode, month_start),
+        ).fetchone()
+    return _row_to_dict(row) or {}
+
+
 # ── Performance stats ─────────────────────────
 
 def get_performance_stats() -> dict:

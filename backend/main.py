@@ -93,6 +93,13 @@ async def on_startup():
     init_db()
     log.info("Database initialised")
 
+    # Migrate paper capital: if still at old 10k default, bump to 40k
+    from database import queries as _mq
+    _cap_val = _mq.get_setting("paper_capital")
+    if _cap_val is None or float(_cap_val) == 10_000.0:
+        _mq.set_setting("paper_capital", "40000.0")
+        log.info("Migrated paper capital: 10000 → 40000")
+
     # Seed disabled_strategies default: vwap_cross paused on first run
     from database import queries as _sq
     if _sq.get_setting("disabled_strategies") is None:

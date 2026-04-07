@@ -1,6 +1,7 @@
 import { useApp } from '../context/AppContext'
 import { fetchKiteLoginUrl } from '../api'
 import CapitalCard from '../components/cards/CapitalCard'
+import CapitalStatsCard from '../components/cards/CapitalStatsCard'
 import PnLCard from '../components/cards/PnLCard'
 import WinRateCard from '../components/cards/WinRateCard'
 import TradesCard from '../components/cards/TradesCard'
@@ -84,6 +85,9 @@ export default function Dashboard() {
         <WinRateCard wins={today.wins ?? 0} losses={today.losses ?? 0} />
         <TradesCard trades={trades} />
       </div>
+
+      {/* Capital portfolio stats */}
+      <CapitalStatsCard />
 
       {/* Chart + Sidebar */}
       <div className="grid grid-cols-1 xl:grid-cols-[1fr_320px] gap-5">
