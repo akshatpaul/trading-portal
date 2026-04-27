@@ -255,20 +255,14 @@ def get_recent_summaries(days: int = 30) -> list[dict]:
 # ── Watchlist ─────────────────────────────────
 
 def upsert_watchlist(date_str: str, entries: list[dict]) -> None:
-    """Replace today's watchlist entries."""
+    """Replace today's watchlist entries (deletes stale rows first)."""
+    rows = [{**e, "date": date_str} for e in entries]
     sql = """
         INSERT INTO watchlist (date, symbol, rank, score, atr_pct, adx, vol_ratio, price)
         VALUES (:date, :symbol, :rank, :score, :atr_pct, :adx, :vol_ratio, :price)
-        ON CONFLICT(date, symbol) DO UPDATE SET
-            rank      = excluded.rank,
-            score     = excluded.score,
-            atr_pct   = excluded.atr_pct,
-            adx       = excluded.adx,
-            vol_ratio = excluded.vol_ratio,
-            price     = excluded.price
     """
-    rows = [{**e, "date": date_str} for e in entries]
     with get_db() as conn:
+        conn.execute("DELETE FROM watchlist WHERE date = ?", (date_str,))
         conn.executemany(sql, rows)
 
 
