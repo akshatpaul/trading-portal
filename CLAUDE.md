@@ -106,7 +106,7 @@ In development, Vite proxies `/api` and `/ws` to `localhost:8000`. In production
 3. ADX > 20
 4. Time between 9:30 AM – 2:30 PM IST
 
-**Exit**: Target = +0.6%, Stop loss = -0.3%, Force close at 3:10 PM IST
+**Exit**: Target = +1.0%, Stop loss = -0.5%, Force close at 3:10 PM IST
 
 **Screener** (8:45 AM): Filters Nifty 50 by price range, volume, ATR, ADX → selects top 3 by composite score
 

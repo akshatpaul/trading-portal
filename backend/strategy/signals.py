@@ -35,7 +35,7 @@ _EMA_FAST       = 9
 _EMA_SLOW       = 21
 _VOL_RATIO_MIN  = 1.5
 _ADX_MIN        = 20.0
-_TARGET_PCT     = 0.010    # +1.0%
+_TARGET_PCT     = 0.015    # +1.5%
 _STOP_PCT       = 0.005    # -0.5%
 _ENTRY_OPEN     = (9,  30)  # 09:30 IST
 _ENTRY_CLOSE    = (14, 30)  # 14:30 IST
@@ -100,7 +100,7 @@ def calculate_targets(entry_price: float) -> tuple[float, float]:
 
     Returns:
         (target_price, stop_loss_price)
-        target    = entry * 1.010  (+1.0%)
+        target    = entry * 1.015  (+1.5%)
         stop_loss = entry * 0.995  (-0.5%)
     """
     target    = round(entry_price * (1 + _TARGET_PCT), 2)
@@ -154,8 +154,8 @@ def check_exit_signal(
     Delegates to the active strategy's exit function.
 
     Returns:
-        "TARGET"      — price reached +0.6% target
-        "STOP_LOSS"   — price hit -0.3% stop
+        "TARGET"      — price reached +1.0% target
+        "STOP_LOSS"   — price hit -0.5% stop
         "FORCE_CLOSE" — time ≥ 15:10 IST
         "RSI_EXIT"    — RSI recovered above 65 (rsi_bounce strategy)
         "VWAP_EXIT"   — price fell below VWAP (vwap_cross strategy)

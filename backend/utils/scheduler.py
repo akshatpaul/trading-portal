@@ -311,7 +311,7 @@ async def job_check_signals():
                 log_activity("signal", f"No entry signal for {sym}", symbol=sym)
 
     except Exception as exc:
-        log.error("job_check_signals failed: %s", exc)
+        log.error("job_check_signals failed: %s", exc, exc_info=True)
 
 
 async def job_late_watchdog():
@@ -390,22 +390,24 @@ async def job_market_snapshot():
 
 
 async def job_force_close():
-    """15:10 — Force close any open position."""
+    """15:10 — Force close all open positions."""
     try:
-        from execution.paper_trader import get_open_paper_position, close_paper_position
+        from execution.paper_trader import get_open_paper_positions, close_paper_position
         from data.yfinance_client import get_latest_price
         from api.websocket import manager
         from database.queries import log_activity
 
-        pos = get_open_paper_position()
-        if pos:
+        positions = get_open_paper_positions()
+        if not positions:
+            log_activity("system", "3:10 PM — market close, no open positions")
+            return
+
+        for pos in positions:
             sym    = pos["symbol"]
             ltp    = get_latest_price(sym) or float(pos["entry_price"])
             result = close_paper_position(pos["id"], ltp, "FORCE_CLOSE")
             await manager.broadcast("trade_complete", result)
             log.info("Force close: %s @ %.2f", sym, ltp)
-        else:
-            log_activity("system", "3:10 PM — market close, no open positions")
     except Exception as exc:
         log.error("job_force_close failed: %s", exc)
 

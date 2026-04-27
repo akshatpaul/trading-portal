@@ -19,10 +19,10 @@ from datetime import datetime
 from typing import Optional
 
 # ── Hardcoded limits — DO NOT change without explicit user instruction ──
-_MAX_POSITION_SIZE  = 5_000.0   # ₹ max capital deployed per trade
+_MAX_POSITION_SIZE  = 10_000.0  # ₹ max capital deployed per trade
 _MAX_LEVERAGE       = 2.0
-_MAX_TRADES_PER_DAY = 3
-_MAX_DAILY_LOSS     = 300.0     # ₹ — stop trading for the day if hit
+_MAX_TRADES_PER_DAY = 5
+_MAX_DAILY_LOSS     = 600.0     # ₹ — stop trading for the day if hit
 _MIN_CAPITAL        = 200.0     # ₹ — floor of Nifty 50 price range
 _FORCE_CLOSE_TIME   = (15, 10)  # HH:MM IST
 

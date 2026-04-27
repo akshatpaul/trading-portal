@@ -29,8 +29,8 @@ log = logging.getLogger(__name__)
 _MIN_PRICE          = 200.0      # ₹
 _MAX_PRICE          = 3000.0     # ₹
 _MIN_AVG_VOLUME     = 500_000    # shares/day
-_MIN_ATR_PCT        = 0.5        # % of price
-_MIN_ADX            = 20.0
+_MIN_ATR_PCT        = 0.3        # % of price
+_MIN_ADX            = 15.0
 _TOP_N              = 3          # symbols to select
 _FETCH_PERIOD       = "35d"      # daily history for indicators (ADX(14) needs 27+ rows)
 

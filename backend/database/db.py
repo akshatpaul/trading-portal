@@ -67,13 +67,15 @@ def init_db() -> None:
             conn.execute(ddl)
 
     # Migrate existing DBs: add strategy column to positions if missing
+    import logging as _log
+    _mlog = _log.getLogger(__name__)
     with get_db() as conn:
-        try:
+        existing = {row[1] for row in conn.execute("PRAGMA table_info(positions)").fetchall()}
+        if "strategy" not in existing:
             conn.execute(
                 "ALTER TABLE positions ADD COLUMN strategy TEXT DEFAULT 'ema_crossover'"
             )
-        except Exception:
-            pass  # column already exists — safe to ignore
+            _mlog.info("DB migration: added strategy column to positions")
 
     # Seed default settings (only if missing)
     _seed_defaults()
