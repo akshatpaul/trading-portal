@@ -169,4 +169,19 @@ export async function toggleStrategy(name) {
   return data
 }
 
+export async function fetchJournal(days = 90) {
+  const { data } = await api.get('/api/journal', { params: { days } })
+  return data
+}
+
+export async function fetchJournalDay(dateStr) {
+  const { data } = await api.get(`/api/journal/${dateStr}`)
+  return data
+}
+
+export async function resetPaperCapital() {
+  const { data } = await api.post('/api/capital/reset')
+  return data
+}
+
 export default api

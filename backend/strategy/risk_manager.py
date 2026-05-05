@@ -2,10 +2,10 @@
 strategy/risk_manager.py — Position sizing and safety limits
 
 HARDCODED SAFETY RULES (UI cannot override these):
-  - Max capital per trade:  ₹5,000
+  - Max capital per trade:  ₹50,000
   - Max leverage:           2x
-  - Max trades per day:     3
-  - Max daily loss:         ₹300
+  - Max trades per day:     6
+  - Max daily loss:         ₹2,000
   - Min capital to trade:   ₹200
   - No trading 9:15–9:30 AM IST
   - Force close at 3:10 PM IST
@@ -19,10 +19,10 @@ from datetime import datetime
 from typing import Optional
 
 # ── Hardcoded limits — DO NOT change without explicit user instruction ──
-_MAX_POSITION_SIZE  = 10_000.0  # ₹ max capital deployed per trade
+_MAX_POSITION_SIZE  = 2_00_000.0 # ₹ max capital deployed per trade (₹10L ÷ 5 stocks)
 _MAX_LEVERAGE       = 2.0
-_MAX_TRADES_PER_DAY = 5
-_MAX_DAILY_LOSS     = 600.0     # ₹ — stop trading for the day if hit
+_MAX_TRADES_PER_DAY = 6
+_MAX_DAILY_LOSS     = 10_000.0  # ₹ — 1% of ₹10L capital
 _MIN_CAPITAL        = 200.0     # ₹ — floor of Nifty 50 price range
 _FORCE_CLOSE_TIME   = (15, 10)  # HH:MM IST
 
@@ -36,7 +36,7 @@ def calculate_position_size(
     Calculate quantity to buy given risk parameters.
 
     Logic:
-      - Max spend = min(capital × 0.5, _MAX_POSITION_SIZE)
+      - Max spend = min(capital, _MAX_POSITION_SIZE)
       - Quantity  = floor(max_spend / price)
       - Minimum   = 1  (always trade at least one share)
 
@@ -54,7 +54,7 @@ def calculate_position_size(
     if price <= 0:
         return 1
 
-    max_spend = min(capital * 0.5, _MAX_POSITION_SIZE)
+    max_spend = min(capital, _MAX_POSITION_SIZE)
     quantity  = math.floor(max_spend / price)
     return max(quantity, 1)
 

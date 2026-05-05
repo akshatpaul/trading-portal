@@ -201,6 +201,29 @@ async def get_capital_stats():
     return get_capital_stats()
 
 
+@router.post("/capital/reset")
+async def reset_paper_capital():
+    """
+    Reset paper capital to the default starting amount.
+    Blocked if any position is currently open.
+    """
+    from execution.paper_trader import get_open_paper_positions, _DEFAULT_CAPITAL, _CAPITAL_KEY, _CAPITAL_RESET_KEY
+    from database.queries import log_activity
+
+    open_positions = get_open_paper_positions()
+    if open_positions:
+        raise HTTPException(
+            status_code=409,
+            detail="Cannot reset capital while positions are open. Close them first.",
+        )
+
+    queries.set_setting(_CAPITAL_KEY, str(_DEFAULT_CAPITAL))
+    queries.set_setting(_CAPITAL_RESET_KEY, now_ist().isoformat())
+    log_activity("system", f"Paper capital manually reset to ₹{_DEFAULT_CAPITAL:,.0f}")
+    log.info("Paper capital reset to ₹%.0f", _DEFAULT_CAPITAL)
+    return {"capital": _DEFAULT_CAPITAL, "message": f"Paper capital reset to ₹{_DEFAULT_CAPITAL:,.0f}"}
+
+
 # ─────────────────────────────────────────────
 # Candles
 # ─────────────────────────────────────────────
@@ -329,6 +352,32 @@ async def get_risk_limits():
 
 
 # ─────────────────────────────────────────────
+# Journal
+# ─────────────────────────────────────────────
+
+@router.get("/journal")
+async def get_journal(days: int = Query(default=90, ge=1, le=365)):
+    """List of trading days with daily P&L summary for the journal view."""
+    return {"days": queries.get_journal_days(days)}
+
+
+@router.get("/journal/{date_str}")
+async def get_journal_day(date_str: str):
+    """Full detail for one trading day: summary, watchlist, trades with strategy."""
+    summary  = queries.get_daily_summary(date_str)
+    watchlist = queries.get_watchlist(date_str)
+    trades   = queries.get_journal_day_trades(date_str)
+    strategies_used = sorted({t["strategy"] for t in trades if t.get("strategy")})
+    return {
+        "date":             date_str,
+        "summary":          summary,
+        "watchlist":        watchlist,
+        "trades":           trades,
+        "strategies_used":  strategies_used,
+    }
+
+
+# ─────────────────────────────────────────────
 # Mode switching
 # ─────────────────────────────────────────────
 
@@ -373,7 +422,7 @@ async def get_strategy():
     from execution.paper_trader import get_open_paper_position
 
     mode         = _current_mode()
-    active       = queries.get_setting("active_strategy", "ema_crossover") or "ema_crossover"
+    active       = queries.get_setting("active_strategy", "orb") or "orb"
     trades_today = queries.get_trades_count_today(mode)
     open_pos     = get_open_paper_position()
     locked       = trades_today > 0 or open_pos is not None

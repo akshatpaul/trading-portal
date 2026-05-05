@@ -106,11 +106,11 @@ In development, Vite proxies `/api` and `/ws` to `localhost:8000`. In production
 3. ADX > 20
 4. Time between 9:30 AM – 2:30 PM IST
 
-**Exit**: Target = +1.0%, Stop loss = -0.5%, Force close at 3:10 PM IST
+**Exit**: Target = +1.5%, Stop loss = -0.5%, Force close at 3:10 PM IST
 
-**Screener** (8:45 AM): Filters Nifty 50 by price range, volume, ATR, ADX → selects top 3 by composite score
+**Screener** (8:45 AM): Filters Nifty 50 by price range, volume, ATR, ADX → selects top 5 by composite score
 
-**Risk limits** (hardcoded in `risk_manager.py` + `.env`): Max position ₹5,000, max 3 trades/day, max daily loss ₹300
+**Risk limits** (hardcoded in `risk_manager.py` + `.env`): Max position ₹25,000, max 6 trades/day, max daily loss ₹2,000
 
 ### Database (SQLite — `trading_portal.db`)
 

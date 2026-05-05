@@ -387,6 +387,35 @@ def purge_old_activity(days: int = 90) -> int:
         return cur.rowcount
 
 
+# ── Journal ───────────────────────────────────
+
+def get_journal_days(days: int = 90) -> list[dict]:
+    """Fetch daily summary rows for journal day list, newest first."""
+    with get_db() as conn:
+        rows = conn.execute("""
+            SELECT
+                ds.*,
+                (SELECT COUNT(*) FROM watchlist w WHERE w.date = ds.date) AS watchlist_count
+            FROM daily_summary ds
+            ORDER BY ds.date DESC
+            LIMIT ?
+        """, (days,)).fetchall()
+    return _rows_to_list(rows)
+
+
+def get_journal_day_trades(date_str: str) -> list[dict]:
+    """Fetch all trades for a day with strategy joined from positions."""
+    with get_db() as conn:
+        rows = conn.execute("""
+            SELECT t.*, COALESCE(p.strategy, 'ema_crossover') AS strategy
+            FROM trades t
+            LEFT JOIN positions p ON t.position_id = p.id
+            WHERE date(t.entry_time) = ?
+            ORDER BY t.entry_time ASC
+        """, (date_str,)).fetchall()
+    return _rows_to_list(rows)
+
+
 # ── Monthly P&L ───────────────────────────────
 
 def get_monthly_pnl(mode: str = "paper") -> dict:

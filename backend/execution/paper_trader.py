@@ -4,7 +4,7 @@ execution/paper_trader.py — Paper trading simulation engine
 Behaviour:
   - Uses real yfinance prices (15-min delayed)
   - Simulates fills with 0.05% slippage on entry only
-  - Virtual capital starts at ₹10,000 (stored in app_settings)
+  - Virtual capital starts at ₹1,00,000 (stored in app_settings)
   - All costs and taxes applied exactly as in calculator.py
   - All trades persisted to SQLite
   - Sends Telegram alerts for every action
@@ -29,9 +29,9 @@ from utils.helpers import now_ist
 
 log = logging.getLogger(__name__)
 
-SLIPPAGE_PCT     = 0.0005   # 0.05% on entry only
-_DEFAULT_CAPITAL = 40_000.0   # Starting paper capital
-_CAPITAL_FLOOR   = 10_000.0   # Auto-reset threshold — refills to _DEFAULT_CAPITAL when hit
+SLIPPAGE_PCT     = 0.0005      # 0.05% on entry only
+_DEFAULT_CAPITAL = 10_00_000.0 # Starting paper capital
+_CAPITAL_FLOOR   = 1_00_000.0  # Auto-reset threshold — refills to _DEFAULT_CAPITAL when hit
 _CAPITAL_KEY          = "paper_capital"
 _CAPITAL_RESET_KEY    = "paper_capital_last_reset"
 _MODE            = "paper"

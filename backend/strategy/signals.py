@@ -521,7 +521,7 @@ def _exit_orb(
 # Strategy registry + dispatcher helpers
 # ─────────────────────────────────────────────
 
-_DEFAULT_STRATEGY = "ema_crossover"
+_DEFAULT_STRATEGY = "orb"
 
 _REGISTRY: dict[str, tuple] = {
     "ema_crossover": (_entry_ema_crossover, _exit_price_targets),
@@ -534,12 +534,14 @@ _REGISTRY: dict[str, tuple] = {
 VALID_STRATEGIES = list(_REGISTRY.keys())
 
 # Fixed priority order for parallel execution: first match on a stock wins
+# ORB is first — fires on a fixed level (opening range high) so 15-min data
+# delay matters less than for lagging crossover strategies.
 STRATEGY_PRIORITY: list[str] = [
+    "orb",
     "ema_crossover",
     "relaxed_ema",
-    "rsi_bounce",
     "vwap_cross",
-    "orb",
+    "rsi_bounce",
 ]
 
 
