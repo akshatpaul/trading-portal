@@ -203,25 +203,26 @@ async def get_capital_stats():
 
 @router.post("/capital/reset")
 async def reset_paper_capital():
-    """
-    Reset paper capital to the default starting amount.
-    Blocked if any position is currently open.
-    """
-    from execution.paper_trader import get_open_paper_positions, _DEFAULT_CAPITAL, _CAPITAL_KEY, _CAPITAL_RESET_KEY
+    """Reset paper capital to the default starting amount, force-closing any open positions first."""
+    from execution.paper_trader import get_open_paper_positions, close_paper_position, _DEFAULT_CAPITAL, _CAPITAL_KEY, _CAPITAL_RESET_KEY
+    from data.yfinance_client import get_latest_price
     from database.queries import log_activity
 
-    open_positions = get_open_paper_positions()
-    if open_positions:
-        raise HTTPException(
-            status_code=409,
-            detail="Cannot reset capital while positions are open. Close them first.",
-        )
+    closed = []
+    for pos in get_open_paper_positions():
+        ltp = get_latest_price(pos["symbol"]) or float(pos["entry_price"])
+        close_paper_position(pos["id"], ltp, "MANUAL")
+        closed.append(pos["symbol"])
 
     queries.set_setting(_CAPITAL_KEY, str(_DEFAULT_CAPITAL))
     queries.set_setting(_CAPITAL_RESET_KEY, now_ist().isoformat())
-    log_activity("system", f"Paper capital manually reset to ₹{_DEFAULT_CAPITAL:,.0f}")
-    log.info("Paper capital reset to ₹%.0f", _DEFAULT_CAPITAL)
-    return {"capital": _DEFAULT_CAPITAL, "message": f"Paper capital reset to ₹{_DEFAULT_CAPITAL:,.0f}"}
+    log_activity("system", f"Paper capital reset to ₹{_DEFAULT_CAPITAL:,.0f}" + (f" — closed {', '.join(closed)}" if closed else ""))
+    log.info("Paper capital reset to ₹%.0f (closed %d positions)", _DEFAULT_CAPITAL, len(closed))
+    return {
+        "capital": _DEFAULT_CAPITAL,
+        "positions_closed": len(closed),
+        "message": f"Capital reset to ₹{_DEFAULT_CAPITAL:,.0f}" + (f" — {len(closed)} position(s) closed" if closed else ""),
+    }
 
 
 # ─────────────────────────────────────────────
