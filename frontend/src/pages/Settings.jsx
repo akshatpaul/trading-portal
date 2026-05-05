@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { fetchRiskLimits, fetchKiteLoginUrl, setModePaper, runScreener } from '../api'
+import { fetchRiskLimits, fetchKiteLoginUrl, setModePaper, runScreener, resetPaperCapital } from '../api'
 import { useApp } from '../context/AppContext'
 import { formatINR } from '../utils/formatters'
 import { useState } from 'react'
@@ -21,6 +21,7 @@ export default function Settings() {
 
   const queryClient = useQueryClient()
   const [screenerLoading, setScreenerLoading] = useState(false)
+  const [capitalResetLoading, setCapitalResetLoading] = useState(false)
 
   const riskQ = useQuery({
     queryKey: ['risk-limits'],
@@ -57,6 +58,20 @@ export default function Settings() {
       toast.error(`Screener failed: ${err?.response?.data?.detail || err.message}`)
     } finally {
       setScreenerLoading(false)
+    }
+  }
+
+  async function handleResetCapital() {
+    setCapitalResetLoading(true)
+    try {
+      const result = await resetPaperCapital()
+      toast.success(`✅ ${result.message}`)
+      refetchStatus()
+      queryClient.invalidateQueries({ queryKey: ['capital-stats'] })
+    } catch (err) {
+      toast.error(`Reset failed: ${err?.response?.data?.detail || err.message}`)
+    } finally {
+      setCapitalResetLoading(false)
     }
   }
 
@@ -186,20 +201,40 @@ export default function Settings() {
       {/* Bot Controls */}
       <div className="card">
         <h3 className="font-semibold text-text-primary mb-4">Bot Controls</h3>
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-sm text-text-primary font-medium">Run Screener Now</p>
-            <p className="text-xs text-text-muted mt-0.5">
-              Manually populate today's watchlist (runs automatically at 8:45 AM IST)
-            </p>
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-text-primary font-medium">Run Screener Now</p>
+              <p className="text-xs text-text-muted mt-0.5">
+                Manually populate today's watchlist — picks top 5 stocks (runs automatically at 8:45 AM IST)
+              </p>
+            </div>
+            <button
+              onClick={handleRunScreener}
+              disabled={screenerLoading}
+              className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+            >
+              {screenerLoading ? 'Running...' : 'Run Screener'}
+            </button>
           </div>
-          <button
-            onClick={handleRunScreener}
-            disabled={screenerLoading}
-            className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
-          >
-            {screenerLoading ? 'Running...' : 'Run Screener'}
-          </button>
+
+          <div className="border-t border-card-border pt-4 flex items-center justify-between">
+            <div>
+              <p className="text-sm text-text-primary font-medium">Reset Paper Capital</p>
+              <p className="text-xs text-text-muted mt-0.5">
+                Resets virtual balance to ₹10,00,000. Cannot undo — close open positions first.
+              </p>
+            </div>
+            <button
+              onClick={handleResetCapital}
+              disabled={capitalResetLoading}
+              className="bg-amber-600 hover:bg-amber-500 text-white font-semibold text-sm
+                         px-4 py-2 rounded-lg transition-colors disabled:opacity-50
+                         disabled:cursor-not-allowed whitespace-nowrap"
+            >
+              {capitalResetLoading ? 'Resetting...' : 'Reset to ₹10L'}
+            </button>
+          </div>
         </div>
       </div>
 
